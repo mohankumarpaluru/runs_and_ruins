@@ -9,7 +9,7 @@ import { Link } from 'react-router-dom';
 import { cn } from '../lib/utils';
 import { supabase } from '../lib/supabaseClient';
 import { toast } from 'sonner';
-import { Plus, X } from 'lucide-react';
+import { Plus, X, Trophy } from 'lucide-react';
 import { TeamLogo } from '../components/TeamLogo';
 
 export function Matches() {
@@ -168,16 +168,28 @@ export function Matches() {
                 </div>
 
                 <div className="flex-1 flex flex-row justify-between items-center py-4 space-x-4">
-                  <div className="flex flex-col items-center flex-1">
+                  <div className={cn("flex flex-col items-center flex-1 relative", match.winner === 'team2' ? "opacity-50 grayscale" : "")}>
+                    {match.winner === 'team1' && (
+                      <div className="absolute -top-3 right-2 md:right-4 bg-success text-black p-1 rounded-full shadow-lg shadow-success/20 z-10 animate-in zoom-in">
+                        <Trophy className="w-3 h-3" />
+                      </div>
+                    )}
                     <TeamLogo team={match.team1} className="w-12 h-12 text-lg mb-2" fallbackColorClass="text-primary bg-primary/20" />
-                    <div className="text-sm md:text-base font-bold text-center text-foreground line-clamp-2">{match.team1}</div>
+                    <div className={cn("text-sm md:text-base font-bold text-center line-clamp-2", match.winner === 'team1' ? "text-success" : "text-foreground")}>{match.team1}</div>
+                    {match.team1_score && <div className="mt-1 text-[10px] sm:text-xs font-mono text-muted-foreground bg-surface/80 border border-white/5 px-2 py-0.5 rounded">{match.team1_score}</div>}
                   </div>
                   
                   <div className="px-3 py-1 rounded-full bg-surface border border-border text-[10px] font-bold text-muted-foreground uppercase tracking-wider shrink-0">VS</div>
                   
-                  <div className="flex flex-col items-center flex-1">
+                  <div className={cn("flex flex-col items-center flex-1 relative", match.winner === 'team1' ? "opacity-50 grayscale" : "")}>
+                    {match.winner === 'team2' && (
+                      <div className="absolute -top-3 right-2 md:right-4 bg-success text-black p-1 rounded-full shadow-lg shadow-success/20 z-10 animate-in zoom-in">
+                        <Trophy className="w-3 h-3" />
+                      </div>
+                    )}
                     <TeamLogo team={match.team2} className="w-12 h-12 text-lg mb-2" fallbackColorClass="text-secondary bg-secondary/20" />
-                    <div className="text-sm md:text-base font-bold text-center text-foreground line-clamp-2">{match.team2}</div>
+                    <div className={cn("text-sm md:text-base font-bold text-center line-clamp-2", match.winner === 'team2' ? "text-success" : "text-foreground")}>{match.team2}</div>
+                    {match.team2_score && <div className="mt-1 text-[10px] sm:text-xs font-mono text-muted-foreground bg-surface/80 border border-white/5 px-2 py-0.5 rounded">{match.team2_score}</div>}
                   </div>
                 </div>
 

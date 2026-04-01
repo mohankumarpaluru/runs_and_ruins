@@ -8,6 +8,7 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '.
 import { Badge } from '../components/ui/badge';
 import { toast } from 'sonner';
 import { UserPlus, User, ShieldCheck, ShieldOff } from 'lucide-react';
+import { cn, getAvatarColor } from '../lib/utils';
 
 export function Participants() {
   const { participants, fetchParticipants } = useStore();
@@ -106,7 +107,7 @@ export function Participants() {
                     <TableRow key={p.id} className="border-white/5 hover:bg-white/[0.02] transition-colors">
                       <TableCell className="font-medium text-foreground">
                         <div className="flex items-center gap-3">
-                          <div className="w-8 h-8 rounded-full bg-primary/10 flex items-center justify-center text-primary font-bold">
+                          <div className={cn("w-8 h-8 rounded-full flex items-center justify-center font-bold text-sm tracking-wide", getAvatarColor(p.name))}>
                             {p.name.charAt(0).toUpperCase()}
                           </div>
                           {p.name}
@@ -151,7 +152,7 @@ export function Participants() {
               participants.map((p) => (
                 <div key={p.id} className="p-4 flex items-center justify-between hover:bg-white/[0.02] transition-colors">
                   <div className="flex items-center gap-3">
-                    <div className="w-10 h-10 rounded-full bg-primary/10 flex items-center justify-center text-primary font-bold text-lg">
+                    <div className={cn("w-10 h-10 rounded-full flex items-center justify-center font-bold text-lg tracking-wide", getAvatarColor(p.name))}>
                       {p.name.charAt(0).toUpperCase()}
                     </div>
                     <div>

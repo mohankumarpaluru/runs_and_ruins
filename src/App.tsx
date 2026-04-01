@@ -23,7 +23,7 @@ export default function App() {
   }, [fetchAll]);
 
   return (
-    <Router>
+    <Router basename="/runs_n_ruins/">
       <Routes>
         <Route path="/" element={<Layout />}>
           <Route index element={<Dashboard />} />

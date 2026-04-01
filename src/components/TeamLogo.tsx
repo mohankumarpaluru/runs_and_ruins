@@ -24,7 +24,7 @@ export function TeamLogo({ team, className, fallbackColorClass }: TeamLogoProps)
         </span>
       ) : (
         <img 
-          src={`/img/${team}.png`} 
+          src={`${import.meta.env.BASE_URL}img/${team}.png`} 
           alt={team} 
           className="object-contain w-[80%] h-[80%] absolute inset-0 m-auto"
           onError={() => setImgError(true)}

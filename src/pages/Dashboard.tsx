@@ -6,7 +6,7 @@ import { LeaderboardEntry } from '../types';
 import { Link } from 'react-router-dom';
 import { Badge } from '../components/ui/badge';
 import { format } from 'date-fns';
-import { cn } from '../lib/utils';
+import { cn, getAvatarColor, getTextColor } from '../lib/utils';
 import { CountUp } from '../components/ui/count-up';
 import { TeamLogo } from '../components/TeamLogo';
 
@@ -26,6 +26,8 @@ export function Dashboard() {
           match_no: match?.match_no || 0,
           team1: match?.team1 || '',
           team2: match?.team2 || '',
+          team1_score: match?.team1_score,
+          team2_score: match?.team2_score,
           matchWinnerName,
           participantName: participant?.name || 'Unknown',
           amountWon: bet.profit_loss,
@@ -184,8 +186,15 @@ export function Dashboard() {
                             <span className="text-muted-foreground font-medium">{index + 1}</span>
                           )}
                         </td>
-                        <td className={cn("px-6 py-4 font-bold", index === 0 ? "text-warning" : "text-foreground")}>
-                          {entry.name}
+                        <td className="px-6 py-4">
+                          <div className="flex items-center gap-3">
+                            <div className={cn("w-8 h-8 rounded-full flex items-center justify-center font-bold text-xs tracking-wide shrink-0", getAvatarColor(entry.name))}>
+                              {entry.name.charAt(0).toUpperCase()}
+                            </div>
+                            <span className={cn("font-bold truncate max-w-[120px]", index === 0 ? "text-warning" : getTextColor(entry.name))}>
+                              {entry.name}
+                            </span>
+                          </div>
                         </td>
                         <td className={cn("px-6 py-4 text-right font-mono font-bold", entry.total_pl > 0 ? 'text-success' : entry.total_pl < 0 ? 'text-danger' : 'text-muted-foreground')}>
                           {entry.total_pl > 0 ? '+' : ''}{entry.total_pl.toLocaleString()}
@@ -218,7 +227,10 @@ export function Dashboard() {
                       <div className="w-6 flex justify-center">
                         {index === 0 ? <Crown className="w-4 h-4 text-warning" /> : <span className="text-muted-foreground text-sm font-medium">{index + 1}</span>}
                       </div>
-                      <div className="font-bold text-foreground">{entry.name}</div>
+                      <div className={cn("w-8 h-8 rounded-full flex items-center justify-center font-bold text-xs tracking-wide shrink-0", getAvatarColor(entry.name))}>
+                        {entry.name.charAt(0).toUpperCase()}
+                      </div>
+                      <div className={cn("font-bold", getTextColor(entry.name))}>{entry.name}</div>
                     </div>
                     <div className="flex flex-col items-end">
                       <span className={cn("font-mono font-bold text-sm", entry.total_pl > 0 ? 'text-success' : entry.total_pl < 0 ? 'text-danger' : 'text-muted-foreground')}>
@@ -316,10 +328,19 @@ export function Dashboard() {
                     winningBets.map((bet) => (
                       <tr key={bet.id} className="border-b border-border/50 hover:bg-surface/30 transition-colors">
                         <td className="px-6 py-4 font-medium text-muted-foreground">Match {bet.match_no}</td>
-                        <td className="px-6 py-4 text-foreground font-medium">{bet.team1} <span className="text-muted-foreground px-1 text-xs">vs</span> {bet.team2}</td>
-                        <td className="px-6 py-4 text-foreground">{bet.matchWinnerName}</td>
-                        <td className="px-6 py-4 font-bold text-foreground flex items-center gap-2">
-                          <div className="w-6 h-6 rounded-full bg-primary/10 flex items-center justify-center text-primary font-bold text-xs uppercase">
+                        <td className="px-6 py-4 text-foreground">
+                          <div className="flex flex-col gap-1">
+                            <span>{bet.team1} {bet.team1_score && <span className="text-muted-foreground text-[10px] font-mono ml-1 bg-surface/50 border border-border py-0.5 px-1.5 rounded">{bet.team1_score}</span>}</span>
+                            <span className="text-muted-foreground text-xs px-1">vs</span>
+                            <span>{bet.team2} {bet.team2_score && <span className="text-muted-foreground text-[10px] font-mono ml-1 bg-surface/50 border border-border py-0.5 px-1.5 rounded">{bet.team2_score}</span>}</span>
+                          </div>
+                        </td>
+                        <td className="px-6 py-4 text-success font-bold flex items-center gap-1.5">
+                          <Trophy className="w-3.5 h-3.5" />
+                          {bet.matchWinnerName}
+                        </td>
+                        <td className={cn("px-6 py-4 font-bold flex items-center gap-2", getTextColor(bet.participantName))}>
+                          <div className={cn("w-6 h-6 rounded-full flex items-center justify-center text-xs uppercase shrink-0", getAvatarColor(bet.participantName))}>
                             {bet.participantName.charAt(0)}
                           </div>
                           {bet.participantName}

@@ -16,7 +16,7 @@ export function Layout() {
   return (
     <div className="min-h-screen bg-background text-foreground flex flex-col md:flex-row pb-16 md:pb-0">
       {/* Desktop Sidebar */}
-      <aside className="hidden md:flex w-64 bg-[#111827] border-r border-border flex-col sticky top-0 h-screen">
+      <aside className="hidden md:flex w-64 bg-surface border-r border-border flex-col sticky top-0 h-screen">
         <div className="p-6">
           <h1 className="text-2xl font-bold text-primary tracking-tight flex items-center gap-2">
             <Trophy className="w-6 h-6" />
@@ -57,7 +57,7 @@ export function Layout() {
       </main>
 
       {/* Mobile Bottom Nav */}
-      <nav className="md:hidden fixed bottom-0 left-0 right-0 bg-[#111827] border-t border-border z-50 px-2 py-2 flex justify-between items-center safe-area-pb">
+      <nav className="md:hidden fixed bottom-0 left-0 right-0 bg-surface border-t border-border z-50 px-2 py-2 flex justify-between items-center safe-area-pb">
         {navItems.map((item) => {
           const Icon = item.icon;
           const isActive = location.pathname === item.path || (item.path !== '/' && location.pathname.startsWith(item.path));

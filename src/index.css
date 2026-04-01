@@ -8,72 +8,83 @@
 @theme inline {
     --font-heading: var(--font-sans);
     --font-sans: 'Inter', sans-serif;
-    --color-background: #0B0F17;
-    --color-surface: #111827;
-    --color-surface-light: #141A24;
-    --color-card: #171E2B;
-    --color-card-gradient-start: #171E2B;
-    --color-card-gradient-end: #131826;
-    --color-border: rgba(255, 255, 255, 0.06);
-    --color-foreground: #F8FAFC;
-    --color-muted-foreground: #AAB3C5;
     
-    --color-primary: #7C5CFF;
-    --color-primary-foreground: #FFFFFF;
-    --color-secondary: #22D3EE;
-    --color-secondary-foreground: #0B0F17;
-    --color-success: #22C55E;
-    --color-warning: #F59E0B;
-    --color-danger: #F43F5E;
+    /* Clean Premium Navy Dark Mode */
+    --color-background: #060B14;
+    --color-surface: #0F172A;
+    --color-surface-light: #1E293B;
+    --color-card: #0F172A;
+    --color-card-gradient-start: #0F172A;
+    --color-card-gradient-end: #0B1121;
+    
+    --color-border: rgba(255, 255, 255, 0.08);
+    --color-foreground: #F8FAFC;
+    --color-muted-foreground: #94A3B8;
+    
+    /* Expressive, High-Stakes Colors */
+    --color-primary: #10B981; /* Vibrant Emerald */
+    --color-primary-foreground: #022C22; /* High contrast text on primary buttons */
+    
+    --color-secondary: #0EA5E9; /* Electric Cyan */
+    --color-secondary-foreground: #0F172A;
+    
+    --color-success: #10B981;
+    --color-warning: #F5A524;
+    --color-danger: #F31260;
 
-    --radius-xl: 1rem;
-    --radius-2xl: 1.25rem;
+    /* Sharper radii for professional look */
+    --radius-xl: 0.75rem;
+    --radius-2xl: 1rem;
     --radius-3xl: 1.5rem;
 }
 
 :root {
-    --background: #0B0F17;
+    --background: #060B14;
     --foreground: #F8FAFC;
-    --card: #171E2B;
+    --card: #0F172A;
     --card-foreground: #F8FAFC;
-    --popover: #141A24;
+    --popover: #1E293B;
     --popover-foreground: #F8FAFC;
-    --primary: #7C5CFF;
-    --primary-foreground: #FFFFFF;
-    --secondary: #22D3EE;
-    --secondary-foreground: #0B0F17;
-    --muted: #141A24;
-    --muted-foreground: #AAB3C5;
-    --accent: #141A24;
+    
+    --primary: #10B981;
+    --primary-foreground: #022C22;
+    --secondary: #0EA5E9;
+    --secondary-foreground: #0F172A;
+    
+    --muted: #1E293B;
+    --muted-foreground: #94A3B8;
+    --accent: #1E293B;
     --accent-foreground: #F8FAFC;
-    --destructive: #F43F5E;
+    
+    --destructive: #F31260;
     --destructive-foreground: #FFFFFF;
-    --border: rgba(255, 255, 255, 0.06);
-    --input: rgba(255, 255, 255, 0.06);
-    --ring: #7C5CFF;
-    --radius: 1rem;
+    
+    --border: rgba(255, 255, 255, 0.08);
+    --input: rgba(255, 255, 255, 0.12);
+    --ring: #10B981;
+    --radius: 0.75rem;
 }
 
 .dark {
-    --background: #0B0F17;
+    --background: #060B14;
     --foreground: #F8FAFC;
-    --card: #171E2B;
+    --card: #0F172A;
     --card-foreground: #F8FAFC;
-    --popover: #141A24;
+    --popover: #1E293B;
     --popover-foreground: #F8FAFC;
-    --primary: #7C5CFF;
-    --primary-foreground: #FFFFFF;
-    --secondary: #22D3EE;
-    --secondary-foreground: #0B0F17;
-    --muted: #141A24;
-    --muted-foreground: #AAB3C5;
-    --accent: #141A24;
+    --primary: #10B981;
+    --primary-foreground: #022C22;
+    --secondary: #0EA5E9;
+    --secondary-foreground: #0F172A;
+    --muted: #1E293B;
+    --muted-foreground: #94A3B8;
+    --accent: #1E293B;
     --accent-foreground: #F8FAFC;
-    --destructive: #F43F5E;
+    --destructive: #F31260;
     --destructive-foreground: #FFFFFF;
-    --border: rgba(255, 255, 255, 0.06);
-    --input: rgba(255, 255, 255, 0.06);
-    --ring: #7C5CFF;
+    --border: rgba(255, 255, 255, 0.08);
+    --input: rgba(255, 255, 255, 0.12);
+    --ring: #10B981;
 }
 
 @layer base {
@@ -90,17 +101,19 @@
 
 @layer utilities {
   .glass-card {
-    background: linear-gradient(180deg, var(--color-card-gradient-start) 0%, var(--color-card-gradient-end) 100%);
+    background: var(--color-card);
     border: 1px solid var(--color-border);
-    box-shadow: 0 12px 30px rgba(0, 0, 0, 0.28);
-    @apply rounded-2xl transition-all duration-300;
+    box-shadow: 0 4px 24px rgba(0, 0, 0, 0.4);
+    @apply rounded-xl transition-all duration-300;
   }
   .glass-card:hover {
     @apply md:-translate-y-1;
-    box-shadow: 0 16px 40px rgba(0, 0, 0, 0.4);
+    border-color: rgba(16, 185, 129, 0.3); /* Emerald tint on hover */
+    box-shadow: 0 8px 32px rgba(0, 0, 0, 0.6);
   }
   .glass-panel {
     background: var(--color-surface);
     border: 1px solid var(--color-border);
+    @apply rounded-xl;
   }
 }

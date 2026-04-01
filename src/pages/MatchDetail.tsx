@@ -11,6 +11,7 @@ import { Badge } from '../components/ui/badge';
 import { toast } from 'sonner';
 import { ArrowLeft, Plus, Trophy, Save, X, Trash2, Undo2, Edit2 } from 'lucide-react';
 import { MatchBet, Match } from '../types';
+import { cn, getAvatarColor } from '../lib/utils';
 import { TeamLogo } from '../components/TeamLogo';
 
 export function MatchDetail() {
@@ -31,6 +32,8 @@ export function MatchDetail() {
     amount: 0,
   });
   const [winner, setWinner] = useState<string>('');
+  const [team1Score, setTeam1Score] = useState<string>('');
+  const [team2Score, setTeam2Score] = useState<string>('');
 
   const suggestedAmount = useMemo(() => {
     if (!match) return 0;
@@ -51,8 +54,10 @@ export function MatchDetail() {
   }, [isAddingBet, suggestedAmount, newBet.amount]);
 
   useEffect(() => {
-    if (match && match.winner) {
-      setWinner(match.winner);
+    if (match) {
+      setWinner(match.winner || '');
+      setTeam1Score(match.team1_score || '');
+      setTeam2Score(match.team2_score || '');
     }
     if (match) {
       setEditMatchData({
@@ -112,7 +117,7 @@ export function MatchDetail() {
       // 1. Update match winner and status
       const { error: matchError } = await supabase
         .from('matches')
-        .update({ winner, status: 'completed' })
+        .update({ winner, status: 'completed', team1_score: team1Score || null, team2_score: team2Score || null })
         .eq('id', match.id);
 
       if (matchError) throw matchError;
@@ -143,7 +148,7 @@ export function MatchDetail() {
     try {
       const { error: matchError } = await supabase
         .from('matches')
-        .update({ winner: null, status: 'scheduled' })
+        .update({ winner: null, status: 'scheduled', team1_score: null, team2_score: null })
         .eq('id', match.id);
 
       if (matchError) throw matchError;
@@ -161,6 +166,8 @@ export function MatchDetail() {
 
       toast.success('Match reopened successfully');
       setWinner('');
+      setTeam1Score('');
+      setTeam2Score('');
       await Promise.all([fetchMatches(), fetchMatchBets()]);
     } catch (error: any) {
       toast.error(error.message || 'Failed to reopen match');
@@ -323,6 +330,7 @@ export function MatchDetail() {
               <div className="flex flex-col items-center flex-1">
                 <TeamLogo team={match.team1} className="w-16 h-16 text-2xl mb-3" fallbackColorClass="text-primary bg-primary/20" />
                 <div className="text-2xl md:text-3xl font-bold text-center text-foreground">{match.team1}</div>
+                {match.team1_score && <div className="mt-2 font-mono text-lg text-foreground bg-surface/50 border border-white/5 px-3 py-1 rounded-md">{match.team1_score}</div>}
               </div>
               
               <div className="flex flex-col items-center justify-center shrink-0">
@@ -332,6 +340,7 @@ export function MatchDetail() {
               <div className="flex flex-col items-center flex-1">
                 <TeamLogo team={match.team2} className="w-16 h-16 text-2xl mb-3" fallbackColorClass="text-secondary bg-secondary/20" />
                 <div className="text-2xl md:text-3xl font-bold text-center text-foreground">{match.team2}</div>
+                {match.team2_score && <div className="mt-2 font-mono text-lg text-foreground bg-surface/50 border border-white/5 px-3 py-1 rounded-md">{match.team2_score}</div>}
               </div>
             </div>
             <div className="flex flex-col sm:flex-row justify-between items-center text-sm text-muted-foreground mt-6 pt-6 border-t border-white/5 gap-2">
@@ -354,6 +363,29 @@ export function MatchDetail() {
             </CardTitle>
           </CardHeader>
           <CardContent className="space-y-6 pt-6">
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+              <div className="space-y-3">
+                <label className="text-sm font-medium text-muted-foreground">{match.team1} Score (Optional)</label>
+                <Input
+                  placeholder="e.g. 185/4 (20.0)"
+                  value={team1Score}
+                  onChange={(e) => setTeam1Score(e.target.value)}
+                  disabled={match.status === 'completed'}
+                  className="bg-surface/50 border-white/5 focus-visible:ring-primary h-12"
+                />
+              </div>
+              <div className="space-y-3">
+                <label className="text-sm font-medium text-muted-foreground">{match.team2} Score (Optional)</label>
+                <Input
+                  placeholder="e.g. 180/8 (20.0)"
+                  value={team2Score}
+                  onChange={(e) => setTeam2Score(e.target.value)}
+                  disabled={match.status === 'completed'}
+                  className="bg-surface/50 border-white/5 focus-visible:ring-primary h-12"
+                />
+              </div>
+            </div>
+            
             <div className="space-y-3">
               <label className="text-sm font-medium text-muted-foreground">Select Winner</label>
               <Select value={winner} onValueChange={setWinner} disabled={match.status === 'completed'}>
@@ -369,24 +401,25 @@ export function MatchDetail() {
               </Select>
             </div>
             <div className="flex gap-2">
-              {match.status === 'completed' && (
+              {match.status === 'completed' ? (
                 <Button 
                   variant="outline"
-                  className="flex-1 border-white/10 hover:bg-white/5 text-muted-foreground h-12 text-base font-medium" 
+                  className="w-full border-white/10 hover:bg-white/5 text-muted-foreground h-12 text-base font-medium" 
                   onClick={handleReopenMatch}
                 >
                   <Undo2 className="w-5 h-5 mr-2" />
-                  Reopen
+                  Reopen Match
+                </Button>
+              ) : (
+                <Button 
+                  className="w-full bg-primary hover:bg-primary/90 text-white h-12 text-base font-medium" 
+                  onClick={handleSetWinner}
+                  disabled={!winner}
+                >
+                  <Save className="w-5 h-5 mr-2" />
+                  Settle Bets
                 </Button>
               )}
-              <Button 
-                className="flex-1 bg-primary hover:bg-primary/90 text-white h-12 text-base font-medium" 
-                onClick={handleSetWinner}
-                disabled={!winner || match.status === 'completed'}
-              >
-                <Save className="w-5 h-5 mr-2" />
-                {match.status === 'completed' ? 'Match Settled' : 'Settle Bets'}
-              </Button>
             </div>
           </CardContent>
         </Card>
@@ -486,7 +519,7 @@ export function MatchDetail() {
                       <TableRow key={bet.id} className="border-white/5 hover:bg-white/[0.02] transition-colors">
                         <TableCell className="font-medium text-foreground">
                           <div className="flex items-center gap-2">
-                            <div className="w-6 h-6 rounded-full bg-primary/10 flex items-center justify-center text-primary font-bold text-xs">
+                            <div className={cn("w-6 h-6 rounded-full flex items-center justify-center font-bold text-xs shrink-0", getAvatarColor(participant?.name || ''))}>
                               {participant?.name?.charAt(0).toUpperCase() || '?'}
                             </div>
                             {participant?.name}
@@ -530,7 +563,7 @@ export function MatchDetail() {
                   <div key={bet.id} className="p-4 space-y-3 hover:bg-white/[0.02] transition-colors">
                     <div className="flex justify-between items-center">
                       <div className="flex items-center gap-2 font-medium text-foreground">
-                        <div className="w-8 h-8 rounded-full bg-primary/10 flex items-center justify-center text-primary font-bold text-sm">
+                        <div className={cn("w-8 h-8 rounded-full flex items-center justify-center font-bold text-sm shrink-0", getAvatarColor(participant?.name || ''))}>
                           {participant?.name?.charAt(0).toUpperCase() || '?'}
                         </div>
                         {participant?.name}

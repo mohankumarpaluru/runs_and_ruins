@@ -9,7 +9,7 @@ import { Badge } from '../components/ui/badge';
 import { toast } from 'sonner';
 import { Plus, Receipt } from 'lucide-react';
 import { MiscBet } from '../types';
-import { cn } from '../lib/utils';
+import { cn, getAvatarColor } from '../lib/utils';
 
 export function MiscBets() {
   const { miscBets, participants, matches, fetchMiscBets } = useStore();
@@ -76,72 +76,99 @@ export function MiscBets() {
             </CardTitle>
           </CardHeader>
           <CardContent className="space-y-4">
-            <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-              <Input
-                placeholder="Bet Title / Description"
-                value={newBet.title}
-                onChange={(e) => setNewBet({ ...newBet, title: e.target.value })}
-                className="bg-background border-border"
-              />
-              <Select value={newBet.match_id || 'none'} onValueChange={(v) => setNewBet({ ...newBet, match_id: v })}>
-                <SelectTrigger className="bg-background border-border">
-                  <SelectValue placeholder="Link to Match (Optional)">
-                    {newBet.match_id && newBet.match_id !== 'none' 
-                      ? (() => {
-                          const m = matches.find(m => m.id === newBet.match_id);
-                          return m ? `Match ${m.match_no}: ${m.team1} vs ${m.team2}` : "Link to Match (Optional)";
-                        })()
-                      : "No Match Linked (General)"}
-                  </SelectValue>
-                </SelectTrigger>
-                <SelectContent className="bg-surface border-border">
-                  <SelectItem value="none">No Match Linked (General)</SelectItem>
-                  {matches.map((m) => (
-                    <SelectItem key={m.id} value={m.id}>Match {m.match_no}: {m.team1} vs {m.team2}</SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-              <Input
-                type="date"
-                value={newBet.bet_date || ''}
-                onChange={(e) => setNewBet({ ...newBet, bet_date: e.target.value })}
-                className="bg-background border-border"
-              />
-            </div>
-            <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-              <Select value={newBet.winner_participant_id} onValueChange={(v) => setNewBet({ ...newBet, winner_participant_id: v })}>
-                <SelectTrigger className="bg-background border-border">
-                  <SelectValue placeholder="Winner">
-                    {participants.find(p => p.id === newBet.winner_participant_id)?.name || "Winner"}
-                  </SelectValue>
-                </SelectTrigger>
-                <SelectContent className="bg-surface border-border">
-                  {participants.filter(p => p.is_active).map((p) => (
-                    <SelectItem key={p.id} value={p.id}>{p.name}</SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+              <div className="space-y-2">
+                <label className="text-xs font-medium text-muted-foreground">Bet Title / Description</label>
+                <Input
+                  placeholder="e.g. Most Sixes, Toss Winner"
+                  value={newBet.title}
+                  onChange={(e) => setNewBet({ ...newBet, title: e.target.value })}
+                  className="bg-background border-border focus-visible:ring-primary"
+                />
+              </div>
 
-              <Select value={newBet.loser_participant_id} onValueChange={(v) => setNewBet({ ...newBet, loser_participant_id: v })}>
-                <SelectTrigger className="bg-background border-border">
-                  <SelectValue placeholder="Loser">
-                    {participants.find(p => p.id === newBet.loser_participant_id)?.name || "Loser"}
-                  </SelectValue>
-                </SelectTrigger>
-                <SelectContent className="bg-surface border-border">
-                  {participants.filter(p => p.is_active).map((p) => (
-                    <SelectItem key={p.id} value={p.id}>{p.name}</SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
+              <div className="space-y-2">
+                <label className="text-xs font-medium text-muted-foreground">Linked Match</label>
+                <Select value={newBet.match_id || 'none'} onValueChange={(v) => {
+                  const updates: Partial<MiscBet> = { match_id: v };
+                  if (v !== 'none') {
+                    const m = matches.find(m => m.id === v);
+                    if (m) updates.bet_date = m.match_date;
+                  }
+                  setNewBet({ ...newBet, ...updates });
+                }}>
+                  <SelectTrigger className="bg-background border-border">
+                    <SelectValue placeholder="Link to Match (Optional)">
+                      {newBet.match_id && newBet.match_id !== 'none' 
+                        ? (() => {
+                            const m = matches.find(m => m.id === newBet.match_id);
+                            return m ? `Match ${m.match_no}: ${m.team1} vs ${m.team2}` : "Link to Match (Optional)";
+                          })()
+                        : "No Match Linked (General)"}
+                    </SelectValue>
+                  </SelectTrigger>
+                  <SelectContent className="bg-surface border-border">
+                    <SelectItem value="none">No Match Linked (General)</SelectItem>
+                    {matches.map((m) => (
+                      <SelectItem key={m.id} value={m.id}>Match {m.match_no}: {m.team1} vs {m.team2}</SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
 
-              <Input
-                type="number"
-                placeholder="Amount"
-                value={newBet.amount || ''}
-                onChange={(e) => setNewBet({ ...newBet, amount: Number(e.target.value) })}
-                className="bg-background border-border"
-              />
+              <div className="space-y-2">
+                <label className="text-xs font-medium text-muted-foreground">Bet Date {newBet.match_id !== 'none' && '(Inferred)'}</label>
+                <Input
+                  type="date"
+                  value={newBet.bet_date || ''}
+                  onChange={(e) => setNewBet({ ...newBet, bet_date: e.target.value })}
+                  disabled={newBet.match_id !== 'none'}
+                  className="bg-background border-border focus-visible:ring-primary disabled:opacity-50"
+                />
+              </div>
+
+              <div className="space-y-2">
+                <label className="text-xs font-medium text-muted-foreground">Winner Participant</label>
+                <Select value={newBet.winner_participant_id} onValueChange={(v) => setNewBet({ ...newBet, winner_participant_id: v })}>
+                  <SelectTrigger className="bg-background border-border focus:ring-primary">
+                    <SelectValue placeholder="Select Winner">
+                      {participants.find(p => p.id === newBet.winner_participant_id)?.name || "Select Winner"}
+                    </SelectValue>
+                  </SelectTrigger>
+                  <SelectContent className="bg-surface border-border">
+                    {participants.filter(p => p.is_active).map((p) => (
+                      <SelectItem key={p.id} value={p.id}>{p.name}</SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+
+              <div className="space-y-2">
+                <label className="text-xs font-medium text-muted-foreground">Loser Participant</label>
+                <Select value={newBet.loser_participant_id} onValueChange={(v) => setNewBet({ ...newBet, loser_participant_id: v })}>
+                  <SelectTrigger className="bg-background border-border focus:ring-primary">
+                    <SelectValue placeholder="Select Loser">
+                      {participants.find(p => p.id === newBet.loser_participant_id)?.name || "Select Loser"}
+                    </SelectValue>
+                  </SelectTrigger>
+                  <SelectContent className="bg-surface border-border">
+                    {participants.filter(p => p.is_active).map((p) => (
+                      <SelectItem key={p.id} value={p.id}>{p.name}</SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+
+              <div className="space-y-2">
+                <label className="text-xs font-medium text-muted-foreground">Wager Amount (₹)</label>
+                <Input
+                  type="number"
+                  placeholder="Amount"
+                  value={newBet.amount || ''}
+                  onChange={(e) => setNewBet({ ...newBet, amount: Number(e.target.value) })}
+                  className="bg-background border-border focus-visible:ring-primary font-mono"
+                />
+              </div>
             </div>
             <div className="flex gap-2 justify-end mt-4">
               <Button variant="ghost" onClick={() => setIsAdding(false)} className="hover:bg-surface">Cancel</Button>
@@ -187,8 +214,22 @@ export function MiscBets() {
                         <td className="px-6 py-4 text-muted-foreground text-xs">
                           {bet.bet_date ? new Date(bet.bet_date).toLocaleDateString() : '-'}
                         </td>
-                        <td className="px-6 py-4 text-success font-medium">{winner?.name}</td>
-                        <td className="px-6 py-4 text-danger font-medium">{loser?.name}</td>
+                        <td className="px-6 py-4">
+                          <div className="flex items-center gap-2">
+                            <div className={cn("w-6 h-6 rounded-full flex items-center justify-center font-bold text-xs shrink-0", getAvatarColor(winner?.name || ''))}>
+                              {winner?.name?.charAt(0).toUpperCase() || '?'}
+                            </div>
+                            <span className="text-foreground font-medium">{winner?.name}</span>
+                          </div>
+                        </td>
+                        <td className="px-6 py-4">
+                          <div className="flex items-center gap-2">
+                            <div className={cn("w-6 h-6 rounded-full flex items-center justify-center font-bold text-xs shrink-0", getAvatarColor(loser?.name || ''))}>
+                              {loser?.name?.charAt(0).toUpperCase() || '?'}
+                            </div>
+                            <span className="text-foreground font-medium">{loser?.name}</span>
+                          </div>
+                        </td>
                         <td className="px-6 py-4 text-right font-mono font-bold">₹{bet.amount}</td>
                         <td className="px-6 py-4 text-center">
                           <Badge variant="outline" className="bg-surface text-muted-foreground border-border">
@@ -231,12 +272,20 @@ export function MiscBets() {
                       </Badge>
                     </div>
                     <div className="flex justify-between items-center text-sm">
-                      <div className="flex flex-col gap-1">
-                        <span className="text-success font-medium flex items-center gap-1">
-                          <span className="text-muted-foreground text-xs w-4">W:</span> {winner?.name}
+                      <div className="flex flex-col gap-2">
+                        <span className="flex items-center gap-2">
+                          <span className="text-muted-foreground text-xs w-4">W:</span>
+                          <div className={cn("w-5 h-5 rounded-full flex items-center justify-center font-bold text-[10px] shrink-0", getAvatarColor(winner?.name || ''))}>
+                            {winner?.name?.charAt(0).toUpperCase() || '?'}
+                          </div>
+                          <span className="text-foreground font-medium">{winner?.name}</span>
                         </span>
-                        <span className="text-danger font-medium flex items-center gap-1">
-                          <span className="text-muted-foreground text-xs w-4">L:</span> {loser?.name}
+                        <span className="flex items-center gap-2">
+                          <span className="text-muted-foreground text-xs w-4">L:</span>
+                          <div className={cn("w-5 h-5 rounded-full flex items-center justify-center font-bold text-[10px] shrink-0", getAvatarColor(loser?.name || ''))}>
+                            {loser?.name?.charAt(0).toUpperCase() || '?'}
+                          </div>
+                          <span className="text-foreground font-medium">{loser?.name}</span>
                         </span>
                       </div>
                       <div className="font-mono font-bold text-lg">₹{bet.amount}</div>

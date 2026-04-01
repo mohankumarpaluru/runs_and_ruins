@@ -15,6 +15,8 @@ export interface Match {
   stage: string;
   winner: string | null;
   status: 'scheduled' | 'completed' | 'settled';
+  team1_score?: string;
+  team2_score?: string;
 }
 
 export interface MatchBet {
