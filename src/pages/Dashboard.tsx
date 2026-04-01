@@ -13,6 +13,7 @@ import { TeamLogo } from '../components/TeamLogo';
 export function Dashboard() {
   const { participants, matches, matchBets, miscBets } = useStore();
   const [isWinnersTableOpen, setIsWinnersTableOpen] = useState(false);
+  const [activeTab, setActiveTab] = useState<'main' | 'side'>('main');
 
   const winningBets = useMemo(() => {
     return matchBets
@@ -35,6 +36,30 @@ export function Dashboard() {
       })
       .sort((a, b) => b.match_no - a.match_no);
   }, [matchBets, matches, participants]);
+
+
+
+  // Side bets grouped by match (null match = 'General')
+  const sideBetsByMatch = useMemo(() => {
+    const settled = miscBets.filter((b) => b.status === 'settled');
+    const groups: { matchNo?: number; matchLabel: string; bets: typeof settled }[] = [];
+    const seen: Record<string, number> = {};
+
+    settled.forEach((bet) => {
+      const matchId = bet.match_id ?? '__general__';
+      if (seen[matchId] === undefined) {
+        const match = bet.match_id ? matches.find((m) => m.id === bet.match_id) : null;
+        const label = match ? `Match ${match.match_no}: ${match.team1} vs ${match.team2}` : 'General (No Match)';
+        seen[matchId] = groups.length;
+        groups.push({ matchNo: match?.match_no, matchLabel: label, bets: [] });
+      }
+      groups[seen[matchId]].bets.push(bet);
+    });
+
+    return groups.sort((a, b) => (b.matchNo ?? 0) - (a.matchNo ?? 0));
+  }, [miscBets, matches]);
+
+
 
   const leaderboard = useMemo(() => {
     const stats: Record<string, LeaderboardEntry> = {};
@@ -267,9 +292,7 @@ export function Dashboard() {
                         <TeamLogo team={nextMatch.team1} className="w-10 h-10 text-sm mb-2" fallbackColorClass="text-primary bg-primary/20" />
                         <div className="text-sm font-bold text-center text-foreground line-clamp-2">{nextMatch.team1}</div>
                       </div>
-                      
                       <div className="px-2 py-1 rounded-full bg-background border border-border text-[10px] font-bold text-muted-foreground uppercase tracking-wider shrink-0">VS</div>
-                      
                       <div className="flex flex-col items-center flex-1">
                         <TeamLogo team={nextMatch.team2} className="w-10 h-10 text-sm mb-2" fallbackColorClass="text-secondary bg-secondary/20" />
                         <div className="text-sm font-bold text-center text-foreground line-clamp-2">{nextMatch.team2}</div>
@@ -290,9 +313,9 @@ export function Dashboard() {
         </div>
       </div>
 
-      {/* Winning Bets Table (Collapsible) */}
+      {/* Winning Bets Summary — Two-Tab Card */}
       <Card className="overflow-hidden">
-        <CardHeader 
+        <CardHeader
           className="flex flex-row items-center justify-between cursor-pointer hover:bg-surface/30 transition-colors py-4 bg-surface/10"
           onClick={() => setIsWinnersTableOpen(!isWinnersTableOpen)}
         >
@@ -304,57 +327,181 @@ export function Dashboard() {
             {isWinnersTableOpen ? <ChevronUp className="w-5 h-5" /> : <ChevronDown className="w-5 h-5" />}
           </button>
         </CardHeader>
+
         {isWinnersTableOpen && (
-          <CardContent className="p-0 border-t border-border/50 animate-in slide-in-from-top-2 duration-200">
-            <div className="overflow-x-auto">
-              <table className="w-full text-sm text-left">
-                <thead className="text-xs text-muted-foreground uppercase bg-surface/30 border-b border-border">
-                  <tr>
-                    <th className="px-6 py-4 font-medium">Match No</th>
-                    <th className="px-6 py-4 font-medium">Teams (Team 1 vs Team 2)</th>
-                    <th className="px-6 py-4 font-medium">Match Winner</th>
-                    <th className="px-6 py-4 font-medium">Bet Winner</th>
-                    <th className="px-6 py-4 font-medium text-right">Amount Won</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {winningBets.length === 0 ? (
-                    <tr>
-                      <td colSpan={5} className="px-6 py-8 text-center text-muted-foreground">
-                        No winning bets have been settled yet.
-                      </td>
-                    </tr>
-                  ) : (
-                    winningBets.map((bet) => (
-                      <tr key={bet.id} className="border-b border-border/50 hover:bg-surface/30 transition-colors">
-                        <td className="px-6 py-4 font-medium text-muted-foreground">Match {bet.match_no}</td>
-                        <td className="px-6 py-4 text-foreground">
-                          <div className="flex flex-col gap-1">
-                            <span>{bet.team1} {bet.team1_score && <span className="text-muted-foreground text-[10px] font-mono ml-1 bg-surface/50 border border-border py-0.5 px-1.5 rounded">{bet.team1_score}</span>}</span>
-                            <span className="text-muted-foreground text-xs px-1">vs</span>
-                            <span>{bet.team2} {bet.team2_score && <span className="text-muted-foreground text-[10px] font-mono ml-1 bg-surface/50 border border-border py-0.5 px-1.5 rounded">{bet.team2_score}</span>}</span>
-                          </div>
-                        </td>
-                        <td className="px-6 py-4 text-success font-bold flex items-center gap-1.5">
-                          <Trophy className="w-3.5 h-3.5" />
-                          {bet.matchWinnerName}
-                        </td>
-                        <td className={cn("px-6 py-4 font-bold flex items-center gap-2", getTextColor(bet.participantName))}>
-                          <div className={cn("w-6 h-6 rounded-full flex items-center justify-center text-xs uppercase shrink-0", getAvatarColor(bet.participantName))}>
-                            {bet.participantName.charAt(0)}
-                          </div>
-                          {bet.participantName}
-                        </td>
-                        <td className="px-6 py-4 text-right font-mono font-bold text-success">
-                          +₹{bet.amountWon.toLocaleString()}
-                        </td>
-                      </tr>
-                    ))
-                  )}
-                </tbody>
-              </table>
+          <div className="animate-in slide-in-from-top-2 duration-200">
+            {/* Tab Bar */}
+            <div className="flex border-b border-border bg-surface/5">
+              <button
+                onClick={() => setActiveTab('main')}
+                className={cn(
+                  'flex-1 py-3 text-sm font-semibold transition-colors relative',
+                  activeTab === 'main'
+                    ? 'text-foreground'
+                    : 'text-muted-foreground hover:text-foreground'
+                )}
+              >
+                Main Bets
+                <span className="ml-2 text-xs bg-surface px-1.5 py-0.5 rounded-full border border-border">
+                  {winningBets.length}
+                </span>
+                {activeTab === 'main' && (
+                  <span className="absolute bottom-0 left-0 right-0 h-0.5 bg-primary" />
+                )}
+              </button>
+              <button
+                onClick={() => setActiveTab('side')}
+                className={cn(
+                  'flex-1 py-3 text-sm font-semibold transition-colors relative',
+                  activeTab === 'side'
+                    ? 'text-foreground'
+                    : 'text-muted-foreground hover:text-foreground'
+                )}
+              >
+                Side Bets
+                <span className="ml-2 text-xs bg-surface px-1.5 py-0.5 rounded-full border border-border">
+                  {miscBets.filter((b) => b.status === 'settled').length}
+                </span>
+                {activeTab === 'side' && (
+                  <span className="absolute bottom-0 left-0 right-0 h-0.5 bg-primary" />
+                )}
+              </button>
             </div>
-          </CardContent>
+
+            {/* Main Bets Tab */}
+            {activeTab === 'main' && (
+              <CardContent className="p-0">
+                <div className="overflow-x-auto">
+                  <table className="w-full text-sm text-left">
+                    <thead className="text-xs text-muted-foreground uppercase bg-surface/30 border-b border-border">
+                      <tr>
+                        <th className="px-6 py-4 font-medium">Match No</th>
+                        <th className="px-6 py-4 font-medium">Teams (Team 1 vs Team 2)</th>
+                        <th className="px-6 py-4 font-medium">Match Winner</th>
+                        <th className="px-6 py-4 font-medium">Bet Winner</th>
+                        <th className="px-6 py-4 font-medium text-right">Amount Won</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {winningBets.length === 0 ? (
+                        <tr>
+                          <td colSpan={5} className="px-6 py-8 text-center text-muted-foreground">
+                            No winning bets have been settled yet.
+                          </td>
+                        </tr>
+                      ) : (
+                        winningBets.map((bet) => (
+                          <tr key={bet.id} className="border-b border-border/50 hover:bg-surface/30 transition-colors">
+                            <td className="px-6 py-4 font-medium text-muted-foreground">Match {bet.match_no}</td>
+                            <td className="px-6 py-4 text-foreground">
+                              <div className="flex flex-col gap-1">
+                                <span>{bet.team1} {bet.team1_score && <span className="text-muted-foreground text-[10px] font-mono ml-1 bg-surface/50 border border-border py-0.5 px-1.5 rounded">{bet.team1_score}</span>}</span>
+                                <span className="text-muted-foreground text-xs px-1">vs</span>
+                                <span>{bet.team2} {bet.team2_score && <span className="text-muted-foreground text-[10px] font-mono ml-1 bg-surface/50 border border-border py-0.5 px-1.5 rounded">{bet.team2_score}</span>}</span>
+                              </div>
+                            </td>
+                            <td className="px-6 py-4 text-success font-bold">
+                              <div className="flex items-center gap-1.5">
+                                <Trophy className="w-3.5 h-3.5" />
+                                {bet.matchWinnerName}
+                              </div>
+                            </td>
+                            <td className={cn("px-6 py-4 font-bold", getTextColor(bet.participantName))}>
+                              <div className="flex items-center gap-2">
+                                <div className={cn("w-6 h-6 rounded-full flex items-center justify-center text-xs uppercase shrink-0", getAvatarColor(bet.participantName))}>
+                                  {bet.participantName.charAt(0)}
+                                </div>
+                                {bet.participantName}
+                              </div>
+                            </td>
+                            <td className="px-6 py-4 text-right font-mono font-bold text-success">
+                              +₹{bet.amountWon.toLocaleString()}
+                            </td>
+                          </tr>
+                        ))
+                      )}
+                    </tbody>
+
+                  </table>
+                </div>
+              </CardContent>
+            )}
+
+            {/* Side Bets Tab */}
+            {activeTab === 'side' && (
+              <CardContent className="p-0">
+                {sideBetsByMatch.length === 0 ? (
+                  <div className="px-6 py-8 text-center text-muted-foreground text-sm">
+                    No settled side bets yet.
+                  </div>
+                ) : (
+                  <div className="overflow-x-auto">
+                    <table className="w-full text-sm text-left">
+                      <thead className="text-xs text-muted-foreground uppercase bg-surface/30 border-b border-border">
+                        <tr>
+                          <th className="px-6 py-4 font-medium">Bet Title</th>
+                          <th className="px-6 py-4 font-medium">Winner</th>
+                          <th className="px-6 py-4 font-medium">Loser</th>
+                          <th className="px-6 py-4 font-medium text-right">Amount</th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {sideBetsByMatch.map((group) => {
+                          const groupTotal = group.bets.reduce((acc, b) => acc + b.amount, 0);
+                          return (
+                            <>
+                              {/* Match group header */}
+                              <tr key={`header-${group.matchLabel}`} className="bg-surface/40 border-b border-border/50">
+                                <td colSpan={4} className="px-6 py-2">
+                                  <span className="text-xs font-bold text-muted-foreground uppercase tracking-wider">{group.matchLabel}</span>
+                                </td>
+                              </tr>
+                              {group.bets.map((bet) => {
+                                const winner = participants.find((p) => p.id === bet.winner_participant_id);
+                                const loser = participants.find((p) => p.id === bet.loser_participant_id);
+                                return (
+                                  <tr key={bet.id} className="border-b border-border/30 hover:bg-surface/20 transition-colors">
+                                    <td className="px-6 py-3 font-medium text-foreground">{bet.title}</td>
+                                    <td className="px-6 py-3">
+                                      <div className="flex items-center gap-2">
+                                        <div className={cn('w-5 h-5 rounded-full flex items-center justify-center font-bold text-[10px] shrink-0', getAvatarColor(winner?.name || ''))}>
+                                          {winner?.name?.charAt(0).toUpperCase() || '?'}
+                                        </div>
+                                        <span className={cn('font-semibold text-xs', getTextColor(winner?.name || ''))}>{winner?.name}</span>
+                                      </div>
+                                    </td>
+                                    <td className="px-6 py-3">
+                                      <div className="flex items-center gap-2">
+                                        <div className={cn('w-5 h-5 rounded-full flex items-center justify-center font-bold text-[10px] shrink-0 opacity-60', getAvatarColor(loser?.name || ''))}>
+                                          {loser?.name?.charAt(0).toUpperCase() || '?'}
+                                        </div>
+                                        <span className="text-xs text-muted-foreground">{loser?.name}</span>
+                                      </div>
+                                    </td>
+                                    <td className="px-6 py-3 text-right font-mono font-bold">₹{bet.amount.toLocaleString()}</td>
+                                  </tr>
+                                );
+                              })}
+                              {/* Per-match subtotal */}
+                              <tr key={`subtotal-${group.matchLabel}`} className="border-b border-border bg-surface/10">
+                                <td colSpan={3} className="px-6 py-2 text-xs font-semibold text-muted-foreground text-right">
+                                  {group.matchLabel} Subtotal
+                                </td>
+                                <td className="px-6 py-2 text-right font-mono font-semibold text-foreground text-xs">
+                                  ₹{groupTotal.toLocaleString()}
+                                </td>
+                              </tr>
+                            </>
+                          );
+                        })}
+                      </tbody>
+
+                    </table>
+                  </div>
+                )}
+              </CardContent>
+            )}
+          </div>
         )}
       </Card>
     </div>

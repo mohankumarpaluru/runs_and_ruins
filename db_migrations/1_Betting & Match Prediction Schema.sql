@@ -83,3 +83,12 @@ create index if not exists idx_match_bets_match_id on match_bets (match_id);
 create index if not exists idx_match_bets_participant_id on match_bets (participant_id);
 create index if not exists idx_misc_bets_bet_date on misc_bets (bet_date desc);
 create index if not exists idx_bet_amount_rules_active on bet_amount_rules (is_active, priority);
+
+
+-- Step 1: Add the missing column
+ALTER TABLE misc_bets
+  ADD COLUMN IF NOT EXISTS match_id uuid REFERENCES matches(id) ON DELETE SET NULL;
+-- Step 2: Add the index (matches what's in your migration file)
+CREATE INDEX IF NOT EXISTS idx_misc_bets_match_id ON misc_bets (match_id);
+-- Step 3: Force PostgREST to reload its schema cache
+NOTIFY pgrst, 'reload schema';

@@ -10,13 +10,15 @@ interface AppState {
   betAmountRules: BetAmountRule[];
   isLoading: boolean;
   error: string | null;
-  
+
   fetchParticipants: () => Promise<void>;
   fetchMatches: () => Promise<void>;
   fetchMatchBets: () => Promise<void>;
   fetchMiscBets: () => Promise<void>;
   fetchBetAmountRules: () => Promise<void>;
   fetchAll: () => Promise<void>;
+  updateMiscBet: (id: string, updates: Partial<MiscBet>) => Promise<void>;
+  deleteMiscBet: (id: string) => Promise<void>;
 }
 
 export const useStore = create<AppState>((set) => ({
@@ -73,5 +75,25 @@ export const useStore = create<AppState>((set) => ({
     } finally {
       set({ isLoading: false });
     }
-  }
+  },
+
+  updateMiscBet: async (id, updates) => {
+    const payload: Record<string, unknown> = {
+      title: updates.title,
+      winner_participant_id: updates.winner_participant_id,
+      loser_participant_id: updates.loser_participant_id,
+      amount: updates.amount,
+      match_id: updates.match_id === 'none' ? null : (updates.match_id ?? null),
+      bet_date: updates.bet_date ?? null,
+    };
+    const { error } = await supabase.from('misc_bets').update(payload).eq('id', id);
+    if (error) throw error;
+    await useStore.getState().fetchMiscBets();
+  },
+
+  deleteMiscBet: async (id) => {
+    const { error } = await supabase.from('misc_bets').delete().eq('id', id);
+    if (error) throw error;
+    set((state) => ({ miscBets: state.miscBets.filter((b) => b.id !== id) }));
+  },
 }));
