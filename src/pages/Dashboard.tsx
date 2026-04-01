@@ -42,7 +42,12 @@ export function Dashboard() {
   // Side bets grouped by match (null match = 'General')
   const sideBetsByMatch = useMemo(() => {
     const settled = miscBets.filter((b) => b.status === 'settled');
-    const groups: { matchNo?: number; matchLabel: string; bets: typeof settled }[] = [];
+    const groups: {
+      matchNo?: number;
+      matchLabel: string;
+      bets: typeof settled;
+      participantPL: { participantName: string; totalPL: number }[];
+    }[] = [];
     const seen: Record<string, number> = {};
 
     settled.forEach((bet) => {
@@ -51,13 +56,33 @@ export function Dashboard() {
         const match = bet.match_id ? matches.find((m) => m.id === bet.match_id) : null;
         const label = match ? `Match ${match.match_no}: ${match.team1} vs ${match.team2}` : 'General (No Match)';
         seen[matchId] = groups.length;
-        groups.push({ matchNo: match?.match_no, matchLabel: label, bets: [] });
+        groups.push({ matchNo: match?.match_no, matchLabel: label, bets: [], participantPL: [] });
       }
       groups[seen[matchId]].bets.push(bet);
     });
 
+    // Calculate per-participant P/L for each match group
+    groups.forEach((group) => {
+      const plMap: Record<string, number> = {};
+      group.bets.forEach((bet) => {
+        const winner = participants.find((p) => p.id === bet.winner_participant_id);
+        const loser = participants.find((p) => p.id === bet.loser_participant_id);
+
+        if (winner) {
+          plMap[winner.name] = (plMap[winner.name] || 0) + bet.amount;
+        }
+        if (loser) {
+          plMap[loser.name] = (plMap[loser.name] || 0) - bet.amount;
+        }
+      });
+
+      group.participantPL = Object.entries(plMap)
+        .map(([name, pl]) => ({ participantName: name, totalPL: pl }))
+        .sort((a, b) => b.totalPL - a.totalPL);
+    });
+
     return groups.sort((a, b) => (b.matchNo ?? 0) - (a.matchNo ?? 0));
-  }, [miscBets, matches]);
+  }, [miscBets, matches, participants]);
 
 
 
@@ -482,13 +507,27 @@ export function Dashboard() {
                                   </tr>
                                 );
                               })}
-                              {/* Per-match subtotal */}
+                              {/* Per-match per-person breakdown */}
                               <tr key={`subtotal-${group.matchLabel}`} className="border-b border-border bg-surface/10">
-                                <td colSpan={3} className="px-6 py-2 text-xs font-semibold text-muted-foreground text-right">
-                                  {group.matchLabel} Subtotal
-                                </td>
-                                <td className="px-6 py-2 text-right font-mono font-semibold text-foreground text-xs">
-                                  ₹{groupTotal.toLocaleString()}
+                                <td colSpan={4} className="px-6 py-3">
+                                  <div className="flex flex-wrap items-center justify-end gap-x-6 gap-y-2">
+                                    <span className="text-xs font-bold text-muted-foreground uppercase tracking-wider mr-auto">
+                                      Match Summary
+                                    </span>
+                                    {group.participantPL.map((item) => (
+                                      <div key={item.participantName} className="flex items-center gap-2">
+                                        <div className={cn("w-5 h-5 rounded-full flex items-center justify-center text-[10px] font-bold shrink-0", getAvatarColor(item.participantName))}>
+                                          {item.participantName.charAt(0)}
+                                        </div>
+                                        <span className={cn("text-xs font-semibold", getTextColor(item.participantName))}>
+                                          {item.participantName}:
+                                        </span>
+                                        <span className={cn("text-xs font-mono font-bold", item.totalPL > 0 ? "text-success" : item.totalPL < 0 ? "text-danger" : "text-muted-foreground")}>
+                                          {item.totalPL > 0 ? "+" : ""}{item.totalPL.toLocaleString()}
+                                        </span>
+                                      </div>
+                                    ))}
+                                  </div>
                                 </td>
                               </tr>
                             </>
