@@ -1,9 +1,14 @@
 import { useStore } from '../store/useStore';
-import { Card, CardContent, CardHeader, CardTitle } from '../components/ui/card';
-import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '../components/ui/table';
 import { useMemo } from 'react';
-import { ArrowRight, CheckCircle2, AlertCircle, Wallet, ArrowUpRight, ArrowDownRight } from 'lucide-react';
-import { Badge } from '../components/ui/badge';
+import {
+  ArrowRight,
+  CheckCircle2,
+  Wallet,
+  ArrowUpRight,
+  ArrowDownRight,
+  HandCoins,
+} from 'lucide-react';
+import { cn, getAvatarColor } from '../lib/utils';
 import { CountUp } from '../components/ui/count-up';
 
 interface SettlementTransaction {
@@ -15,12 +20,12 @@ interface SettlementTransaction {
 export function Settlement() {
   const { participants, matchBets, miscBets } = useStore();
 
-  const { balances, transactions } = useMemo<{ balances: Record<string, number>, transactions: SettlementTransaction[] }>(() => {
+  const { balances, transactions } = useMemo<{
+    balances: Record<string, number>;
+    transactions: SettlementTransaction[];
+  }>(() => {
     const balances: Record<string, number> = {};
-
-    participants.forEach((p) => {
-      balances[p.id] = 0;
-    });
+    participants.forEach((p) => { balances[p.id] = 0; });
 
     matchBets.forEach((bet) => {
       if (balances[bet.participant_id] !== undefined && bet.result !== 'pending') {
@@ -30,16 +35,13 @@ export function Settlement() {
 
     miscBets.forEach((bet) => {
       if (bet.status === 'settled') {
-        if (balances[bet.winner_participant_id] !== undefined) {
+        if (balances[bet.winner_participant_id] !== undefined)
           balances[bet.winner_participant_id] += bet.amount;
-        }
-        if (balances[bet.loser_participant_id] !== undefined) {
+        if (balances[bet.loser_participant_id] !== undefined)
           balances[bet.loser_participant_id] -= bet.amount;
-        }
       }
     });
 
-    // Calculate settlements
     const debtors: { id: string; amount: number }[] = [];
     const creditors: { id: string; amount: number }[] = [];
 
@@ -52,25 +54,14 @@ export function Settlement() {
     creditors.sort((a, b) => b.amount - a.amount);
 
     const transactions: SettlementTransaction[] = [];
-    let i = 0;
-    let j = 0;
-
+    let i = 0, j = 0;
     while (i < debtors.length && j < creditors.length) {
       const debtor = debtors[i];
       const creditor = creditors[j];
       const amount = Math.min(debtor.amount, creditor.amount);
-
-      if (amount > 0) {
-        transactions.push({
-          from: debtor.id,
-          to: creditor.id,
-          amount,
-        });
-      }
-
+      if (amount > 0) transactions.push({ from: debtor.id, to: creditor.id, amount });
       debtor.amount -= amount;
       creditor.amount -= amount;
-
       if (debtor.amount === 0) i++;
       if (creditor.amount === 0) j++;
     }
@@ -78,173 +69,246 @@ export function Settlement() {
     return { balances, transactions };
   }, [participants, matchBets, miscBets]);
 
-  const getParticipantName = (id: string) => participants.find((p) => p.id === id)?.name || 'Unknown';
+  const getName = (id: string) => participants.find((p) => p.id === id)?.name || 'Unknown';
 
-  const totalOutstanding = useMemo(() => {
-    return (Object.values(balances) as number[]).reduce((acc, val) => (val > 0 ? acc + val : acc), 0);
-  }, [balances]);
+  const totalOutstanding = useMemo(
+    () => (Object.values(balances) as number[]).reduce((acc, val) => (val > 0 ? acc + val : acc), 0),
+    [balances]
+  );
+
+  const allSettled = transactions.length === 0;
+
+  const sortedBalances = (Object.entries(balances) as [string, number][]).sort(
+    ([, a], [, b]) => b - a
+  );
 
   return (
-    <div className="space-y-6 animate-in fade-in duration-500">
-      <div className="flex justify-between items-center">
-        <h1 className="text-3xl font-bold tracking-tight text-foreground">Payouts</h1>
+    <div className="space-y-7 page-enter">
+      {/* Header */}
+      <div>
+        <h1 className="section-header text-3xl md:text-4xl">Settlement</h1>
+        <p className="section-meta mt-1.5">Season-end payouts & balances</p>
       </div>
 
+      {/* All settled banner */}
+      {allSettled && participants.length > 0 && (
+        <div
+          className="flex items-center gap-4 p-5 rounded-2xl"
+          style={{
+            background: 'linear-gradient(135deg, rgba(34,197,94,0.08) 0%, rgba(0,212,200,0.05) 100%)',
+            border: '1px solid rgba(34,197,94,0.2)',
+          }}
+        >
+          <div
+            className="w-12 h-12 rounded-full flex items-center justify-center shrink-0"
+            style={{ background: 'rgba(34,197,94,0.1)', border: '1px solid rgba(34,197,94,0.2)' }}
+          >
+            <CheckCircle2 className="w-6 h-6" style={{ color: '#22C55E' }} />
+          </div>
+          <div>
+            <div className="font-bold text-base" style={{ fontFamily: 'var(--font-heading)', color: '#22C55E' }}>
+              All Settled Up
+            </div>
+            <div className="text-sm mt-0.5" style={{ color: '#4A5F75' }}>
+              No pending transactions — everyone's square.
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Two-col grid */}
       <div className="grid gap-6 md:grid-cols-2">
-        {/* Final Balances */}
-        <Card className="glass-card overflow-hidden">
-          <CardHeader className="bg-surface/30 border-b border-white/5">
-            <CardTitle className="text-xl font-bold flex items-center gap-2 text-foreground">
-              <Wallet className="w-5 h-5 text-primary" />
-              Final Balances
-            </CardTitle>
-          </CardHeader>
-          <CardContent className="p-0">
-            {/* Desktop View */}
-            <div className="hidden md:block">
-              <Table>
-                <TableHeader className="bg-surface/50">
-                  <TableRow className="border-white/5 hover:bg-transparent">
-                    <TableHead className="text-muted-foreground font-medium">Participant</TableHead>
-                    <TableHead className="text-right text-muted-foreground font-medium">Net Balance</TableHead>
-                  </TableRow>
-                </TableHeader>
-                <TableBody>
-                  {(Object.entries(balances) as [string, number][])
-                    .sort(([, a], [, b]) => b - a)
-                    .map(([id, amount]) => (
-                      <TableRow key={id} className="border-white/5 hover:bg-white/[0.02] transition-colors">
-                        <TableCell className="font-medium text-foreground">
-                          <div className="flex items-center gap-3">
-                            <div className="w-8 h-8 rounded-full bg-primary/10 flex items-center justify-center text-primary font-bold">
-                              {getParticipantName(id).charAt(0).toUpperCase()}
-                            </div>
-                            {getParticipantName(id)}
-                          </div>
-                        </TableCell>
-                        <TableCell className={`text-right font-mono font-bold ${amount > 0 ? 'text-success' : amount < 0 ? 'text-danger' : 'text-muted-foreground'}`}>
-                          <div className="flex items-center justify-end gap-1">
-                            {amount > 0 ? <ArrowUpRight className="w-4 h-4" /> : amount < 0 ? <ArrowDownRight className="w-4 h-4" /> : null}
-                            ₹{Math.abs(amount).toLocaleString()}
-                          </div>
-                        </TableCell>
-                      </TableRow>
-                    ))}
-                </TableBody>
-              </Table>
-            </div>
 
-            {/* Mobile View */}
-            <div className="md:hidden flex flex-col divide-y divide-white/5">
-              {(Object.entries(balances) as [string, number][])
-                .sort(([, a], [, b]) => b - a)
-                .map(([id, amount]) => (
-                  <div key={id} className="p-4 flex items-center justify-between hover:bg-white/[0.02] transition-colors">
-                    <div className="flex items-center gap-3">
-                      <div className="w-10 h-10 rounded-full bg-primary/10 flex items-center justify-center text-primary font-bold text-lg">
-                        {getParticipantName(id).charAt(0).toUpperCase()}
-                      </div>
-                      <div className="font-medium text-foreground">{getParticipantName(id)}</div>
+        {/* ── Final Balances ── */}
+        <div className="rr-card overflow-hidden">
+          {/* Card header */}
+          <div
+            className="px-5 py-4 flex items-center gap-3"
+            style={{ borderBottom: '1px solid rgba(255,255,255,0.05)', background: 'rgba(255,255,255,0.01)' }}
+          >
+            <Wallet className="w-5 h-5" style={{ color: '#00D4C8' }} />
+            <span className="section-header text-lg">Final Balances</span>
+          </div>
+
+          {sortedBalances.length === 0 ? (
+            <div className="empty-state m-4">
+              <Wallet className="w-10 h-10" style={{ color: '#2A3F55' }} />
+              <p className="text-base" style={{ color: '#4A5F75' }}>No balance data yet</p>
+            </div>
+          ) : (
+            <div>
+              {sortedBalances.map(([id, amount], idx) => {
+                const name = getName(id);
+                const isPos = amount > 0;
+                const isNeg = amount < 0;
+                return (
+                  <div
+                    key={id}
+                    className={cn(
+                      'flex items-center gap-4 px-5 py-4 transition-colors',
+                      idx < sortedBalances.length - 1 ? 'border-b' : ''
+                    )}
+                    style={{
+                      borderColor: 'rgba(255,255,255,0.04)',
+                      borderLeft: `3px solid ${isPos ? 'rgba(34,197,94,0.5)' : isNeg ? 'rgba(239,68,68,0.45)' : 'transparent'}`,
+                      background: isPos ? 'rgba(34,197,94,0.02)' : isNeg ? 'rgba(239,68,68,0.02)' : 'transparent',
+                    }}
+                  >
+                    {/* Avatar */}
+                    <div className={cn('w-10 h-10 rounded-full flex items-center justify-center font-bold text-sm shrink-0', getAvatarColor(name))}>
+                      {name.charAt(0).toUpperCase()}
                     </div>
-                    <div className={`font-mono font-bold text-lg flex items-center gap-1 ${amount > 0 ? 'text-success' : amount < 0 ? 'text-danger' : 'text-muted-foreground'}`}>
-                      {amount > 0 ? <ArrowUpRight className="w-4 h-4" /> : amount < 0 ? <ArrowDownRight className="w-4 h-4" /> : null}
-                      ₹{Math.abs(amount).toLocaleString()}
+                    {/* Name */}
+                    <div
+                      className="flex-1 font-semibold text-base"
+                      style={{ fontFamily: 'var(--font-heading)', color: '#E8EDF5' }}
+                    >
+                      {name}
+                    </div>
+                    {/* Balance */}
+                    <div className="flex items-center gap-1.5">
+                      {isPos
+                        ? <ArrowUpRight className="w-4 h-4" style={{ color: '#22C55E' }} />
+                        : isNeg
+                        ? <ArrowDownRight className="w-4 h-4" style={{ color: '#EF4444' }} />
+                        : null}
+                      <span
+                        className={cn(
+                          'scoreboard-num text-lg font-bold',
+                          isPos ? 'pl-positive' : isNeg ? 'pl-negative' : 'pl-neutral'
+                        )}
+                      >
+                        {isPos ? '+' : isNeg ? '-' : ''}₹{Math.abs(amount).toLocaleString()}
+                      </span>
                     </div>
                   </div>
-                ))}
+                );
+              })}
             </div>
-          </CardContent>
-        </Card>
+          )}
+        </div>
 
-        {/* Settlement Plan */}
-        <Card className="glass-card overflow-hidden">
-          <CardHeader className="flex flex-row items-center justify-between bg-surface/30 border-b border-white/5">
-            <CardTitle className="text-xl font-bold flex items-center gap-2 text-foreground">
-              <AlertCircle className="w-5 h-5 text-warning" />
-              Who Owes Whom
-            </CardTitle>
-            <Badge variant="outline" className="border-white/10 text-muted-foreground bg-surface/50">
-              Total: <CountUp value={totalOutstanding} prefix="₹" />
-            </Badge>
-          </CardHeader>
-          <CardContent className="p-0">
-            {/* Desktop View */}
-            <div className="hidden md:block">
-              <Table>
-                <TableHeader className="bg-surface/50">
-                  <TableRow className="border-white/5 hover:bg-transparent">
-                    <TableHead className="text-muted-foreground font-medium">From</TableHead>
-                    <TableHead className="text-center text-muted-foreground font-medium"></TableHead>
-                    <TableHead className="text-muted-foreground font-medium">To</TableHead>
-                    <TableHead className="text-right text-muted-foreground font-medium">Amount</TableHead>
-                  </TableRow>
-                </TableHeader>
-                <TableBody>
-                  {transactions.length === 0 ? (
-                    <TableRow className="border-white/5">
-                      <TableCell colSpan={4} className="text-center text-muted-foreground py-12">
-                        <div className="flex flex-col items-center justify-center gap-2">
-                          <CheckCircle2 className="w-8 h-8 text-success opacity-50" />
-                          <p>All settled up! No transactions needed.</p>
-                        </div>
-                      </TableCell>
-                    </TableRow>
-                  ) : (
-                    transactions.map((t, i) => (
-                      <TableRow key={i} className="border-white/5 hover:bg-white/[0.02] transition-colors">
-                        <TableCell className="font-medium text-danger">{getParticipantName(t.from)}</TableCell>
-                        <TableCell className="text-center text-muted-foreground">
-                          <ArrowRight className="w-4 h-4 mx-auto" />
-                        </TableCell>
-                        <TableCell className="font-medium text-success">{getParticipantName(t.to)}</TableCell>
-                        <TableCell className="text-right font-mono font-bold text-foreground">
-                          ₹{t.amount.toLocaleString()}
-                        </TableCell>
-                      </TableRow>
-                    ))
-                  )}
-                </TableBody>
-              </Table>
+        {/* ── Who Owes Whom ── */}
+        <div className="rr-card overflow-hidden">
+          {/* Card header */}
+          <div
+            className="px-5 py-4 flex items-center justify-between gap-3"
+            style={{ borderBottom: '1px solid rgba(255,255,255,0.05)', background: 'rgba(255,255,255,0.01)' }}
+          >
+            <div className="flex items-center gap-3">
+              <HandCoins className="w-5 h-5" style={{ color: '#F5A524' }} />
+              <span className="section-header text-lg">Who Owes Whom</span>
             </div>
+            {totalOutstanding > 0 && (
+              <div
+                className="flex items-center gap-2 px-3 py-1.5 rounded-lg"
+                style={{ background: 'rgba(245,165,36,0.08)', border: '1px solid rgba(245,165,36,0.15)' }}
+              >
+                <span className="field-label" style={{ color: '#4A5F75' }}>Outstanding</span>
+                <span className="scoreboard-num text-sm font-bold" style={{ color: '#F5A524' }}>
+                  ₹<CountUp value={totalOutstanding} />
+                </span>
+              </div>
+            )}
+          </div>
 
-            {/* Mobile View */}
-            <div className="md:hidden flex flex-col divide-y divide-white/5">
-              {transactions.length === 0 ? (
-                <div className="text-center text-muted-foreground py-12">
-                  <div className="flex flex-col items-center justify-center gap-2">
-                    <CheckCircle2 className="w-8 h-8 text-success opacity-50" />
-                    <p>All settled up! No transactions needed.</p>
-                  </div>
-                </div>
-              ) : (
-                transactions.map((t, i) => (
-                  <div key={i} className="p-4 flex flex-col gap-3 hover:bg-white/[0.02] transition-colors">
-                    <div className="flex items-center justify-between">
-                      <div className="flex items-center gap-2 text-danger font-medium">
-                        <div className="w-8 h-8 rounded-full bg-danger/10 flex items-center justify-center text-danger text-sm">
-                          {getParticipantName(t.from).charAt(0).toUpperCase()}
+          {transactions.length === 0 ? (
+            <div className="empty-state m-4">
+              <CheckCircle2 className="w-10 h-10" style={{ color: '#22C55E', opacity: 0.6 }} />
+              <p className="font-bold text-base" style={{ color: '#22C55E' }}>All cleared!</p>
+              <p className="text-sm" style={{ color: '#4A5F75' }}>No transactions needed</p>
+            </div>
+          ) : (
+            <div>
+              {/* Desktop header */}
+              <div
+                className="hidden md:grid grid-cols-[1fr_32px_1fr_120px] px-5 py-3 text-xs font-black uppercase tracking-widest"
+                style={{ color: '#2A3F55', borderBottom: '1px solid rgba(255,255,255,0.04)', fontFamily: 'var(--font-heading)' }}
+              >
+                <span>Owes</span>
+                <span />
+                <span>To</span>
+                <span className="text-right">Amount</span>
+              </div>
+
+              {transactions.map((t, i) => {
+                const fromName = getName(t.from);
+                const toName = getName(t.to);
+                return (
+                  <div
+                    key={i}
+                    className={cn(
+                      'px-5 py-4 transition-colors hover:bg-white/[0.02]',
+                      i < transactions.length - 1 ? 'border-b' : ''
+                    )}
+                    style={{ borderColor: 'rgba(255,255,255,0.04)' }}
+                  >
+                    {/* Desktop row */}
+                    <div className="hidden md:grid grid-cols-[1fr_32px_1fr_120px] items-center gap-3">
+                      {/* From */}
+                      <div className="flex items-center gap-2.5">
+                        <div className={cn('w-9 h-9 rounded-full flex items-center justify-center font-bold text-sm shrink-0', getAvatarColor(fromName))}>
+                          {fromName.charAt(0).toUpperCase()}
                         </div>
-                        {getParticipantName(t.from)}
+                        <span className="text-base font-semibold" style={{ color: '#EF4444', fontFamily: 'var(--font-heading)' }}>
+                          {fromName}
+                        </span>
                       </div>
-                      <ArrowRight className="w-5 h-5 text-muted-foreground" />
-                      <div className="flex items-center gap-2 text-success font-medium">
-                        {getParticipantName(t.to)}
-                        <div className="w-8 h-8 rounded-full bg-success/10 flex items-center justify-center text-success text-sm">
-                          {getParticipantName(t.to).charAt(0).toUpperCase()}
+                      {/* Arrow */}
+                      <div className="flex justify-center">
+                        <ArrowRight className="w-4 h-4" style={{ color: '#2A3F55' }} />
+                      </div>
+                      {/* To */}
+                      <div className="flex items-center gap-2.5">
+                        <div className={cn('w-9 h-9 rounded-full flex items-center justify-center font-bold text-sm shrink-0', getAvatarColor(toName))}>
+                          {toName.charAt(0).toUpperCase()}
                         </div>
+                        <span className="text-base font-semibold" style={{ color: '#22C55E', fontFamily: 'var(--font-heading)' }}>
+                          {toName}
+                        </span>
                       </div>
-                    </div>
-                    <div className="flex justify-center">
-                      <Badge variant="outline" className="bg-surface/50 border-white/10 text-foreground font-mono text-base px-4 py-1">
+                      {/* Amount */}
+                      <div className="text-right scoreboard-num text-lg font-bold" style={{ color: '#E8EDF5' }}>
                         ₹{t.amount.toLocaleString()}
-                      </Badge>
+                      </div>
+                    </div>
+
+                    {/* Mobile card */}
+                    <div className="md:hidden space-y-3">
+                      <div className="flex items-center justify-between">
+                        <div className="flex items-center gap-2.5">
+                          <div className={cn('w-9 h-9 rounded-full flex items-center justify-center font-bold text-sm shrink-0', getAvatarColor(fromName))}>
+                            {fromName.charAt(0).toUpperCase()}
+                          </div>
+                          <span className="text-base font-semibold" style={{ color: '#EF4444', fontFamily: 'var(--font-heading)' }}>
+                            {fromName}
+                          </span>
+                        </div>
+                        <ArrowRight className="w-5 h-5" style={{ color: '#2A3F55' }} />
+                        <div className="flex items-center gap-2.5">
+                          <span className="text-base font-semibold" style={{ color: '#22C55E', fontFamily: 'var(--font-heading)' }}>
+                            {toName}
+                          </span>
+                          <div className={cn('w-9 h-9 rounded-full flex items-center justify-center font-bold text-sm shrink-0', getAvatarColor(toName))}>
+                            {toName.charAt(0).toUpperCase()}
+                          </div>
+                        </div>
+                      </div>
+                      <div className="text-center">
+                        <span
+                          className="scoreboard-num text-xl font-bold px-5 py-2 rounded-xl inline-block"
+                          style={{ background: 'rgba(245,165,36,0.08)', border: '1px solid rgba(245,165,36,0.15)', color: '#F5A524' }}
+                        >
+                          ₹{t.amount.toLocaleString()}
+                        </span>
+                      </div>
                     </div>
                   </div>
-                ))
-              )}
+                );
+              })}
             </div>
-          </CardContent>
-        </Card>
+          )}
+        </div>
       </div>
     </div>
   );

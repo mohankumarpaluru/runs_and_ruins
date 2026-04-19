@@ -1,12 +1,10 @@
 import { useStore } from '../store/useStore';
-import { Card, CardContent, CardHeader, CardTitle } from '../components/ui/card';
-import { Trophy, TrendingUp, Users, Activity, CalendarDays, Crown, ChevronDown, ChevronUp } from 'lucide-react';
+import { Trophy, TrendingUp, Users, Activity, CalendarDays, Crown, ChevronDown, ChevronUp, ArrowUp } from 'lucide-react';
 import { useMemo, useState } from 'react';
 import { LeaderboardEntry } from '../types';
 import { Link } from 'react-router-dom';
-import { Badge } from '../components/ui/badge';
 import { format } from 'date-fns';
-import { cn, getAvatarColor, getTextColor } from '../lib/utils';
+import { cn, getAvatarColor } from '../lib/utils';
 import { CountUp } from '../components/ui/count-up';
 import { TeamLogo } from '../components/TeamLogo';
 
@@ -37,9 +35,6 @@ export function Dashboard() {
       .sort((a, b) => b.match_no - a.match_no);
   }, [matchBets, matches, participants]);
 
-
-
-  // Side bets grouped by match (null match = 'General')
   const sideBetsByMatch = useMemo(() => {
     const settled = miscBets.filter((b) => b.status === 'settled');
     const groups: {
@@ -61,21 +56,14 @@ export function Dashboard() {
       groups[seen[matchId]].bets.push(bet);
     });
 
-    // Calculate per-participant P/L for each match group
     groups.forEach((group) => {
       const plMap: Record<string, number> = {};
       group.bets.forEach((bet) => {
         const winner = participants.find((p) => p.id === bet.winner_participant_id);
         const loser = participants.find((p) => p.id === bet.loser_participant_id);
-
-        if (winner) {
-          plMap[winner.name] = (plMap[winner.name] || 0) + bet.amount;
-        }
-        if (loser) {
-          plMap[loser.name] = (plMap[loser.name] || 0) - bet.amount;
-        }
+        if (winner) plMap[winner.name] = (plMap[winner.name] || 0) + bet.amount;
+        if (loser) plMap[loser.name] = (plMap[loser.name] || 0) - bet.amount;
       });
-
       group.participantPL = Object.entries(plMap)
         .map(([name, pl]) => ({ participantName: name, totalPL: pl }))
         .sort((a, b) => b.totalPL - a.totalPL);
@@ -84,23 +72,11 @@ export function Dashboard() {
     return groups.sort((a, b) => (b.matchNo ?? 0) - (a.matchNo ?? 0));
   }, [miscBets, matches, participants]);
 
-
-
   const leaderboard = useMemo(() => {
     const stats: Record<string, LeaderboardEntry> = {};
-
     participants.forEach((p) => {
-      stats[p.id] = {
-        participant_id: p.id,
-        name: p.name,
-        total_pl: 0,
-        matches_played: 0,
-        wins: 0,
-        losses: 0,
-        win_rate: 0,
-      };
+      stats[p.id] = { participant_id: p.id, name: p.name, total_pl: 0, matches_played: 0, wins: 0, losses: 0, win_rate: 0 };
     });
-
     matchBets.forEach((bet) => {
       if (stats[bet.participant_id] && bet.result !== 'pending') {
         stats[bet.participant_id].total_pl += bet.profit_loss;
@@ -109,18 +85,12 @@ export function Dashboard() {
         if (bet.result === 'loss') stats[bet.participant_id].losses += 1;
       }
     });
-
     miscBets.forEach((bet) => {
       if (bet.status === 'settled') {
-        if (stats[bet.winner_participant_id]) {
-          stats[bet.winner_participant_id].total_pl += bet.amount;
-        }
-        if (stats[bet.loser_participant_id]) {
-          stats[bet.loser_participant_id].total_pl -= bet.amount;
-        }
+        if (stats[bet.winner_participant_id]) stats[bet.winner_participant_id].total_pl += bet.amount;
+        if (stats[bet.loser_participant_id]) stats[bet.loser_participant_id].total_pl -= bet.amount;
       }
     });
-
     return Object.values(stats)
       .map((stat) => {
         stat.win_rate = stat.matches_played > 0 ? (stat.wins / stat.matches_played) * 100 : 0;
@@ -129,420 +99,485 @@ export function Dashboard() {
       .sort((a, b) => b.total_pl - a.total_pl);
   }, [participants, matchBets, miscBets]);
 
-  const nextMatch = useMemo(() => {
-    return matches.find((m) => m.status === 'scheduled');
-  }, [matches]);
+  const nextMatch = useMemo(() => matches.find((m) => m.status === 'scheduled'), [matches]);
+  const completedMatches = useMemo(() => matches.filter((m) => m.status === 'completed' || m.status === 'settled').length, [matches]);
+  const totalPool = useMemo(
+    () => matchBets.reduce((acc, bet) => acc + bet.amount, 0) + miscBets.reduce((acc, bet) => acc + bet.amount, 0),
+    [matchBets, miscBets]
+  );
 
-  const totalPool = useMemo(() => {
-    return matchBets.reduce((acc, bet) => acc + bet.amount, 0) + miscBets.reduce((acc, bet) => acc + bet.amount, 0);
-  }, [matchBets, miscBets]);
+  const leader = leaderboard[0];
 
   return (
-    <div className="space-y-8 animate-in fade-in duration-500">
-      <div className="flex justify-between items-center">
-        <h1 className="text-3xl md:text-4xl font-bold tracking-tight text-foreground">Overview</h1>
+    <div className="space-y-7 page-enter">
+      {/* Page Title */}
+      <div>
+        <h1 className="section-header text-2xl md:text-3xl xl:text-4xl">Overview</h1>
+        <p className="section-meta mt-1.5">Season standings & match activity</p>
       </div>
 
-      {/* KPI Cards */}
-      <div className="grid gap-4 grid-cols-2 lg:grid-cols-4">
-        <Card>
-          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-            <CardTitle className="text-sm font-semibold text-muted-foreground">Total Participants</CardTitle>
-            <div className="w-8 h-8 rounded-full bg-primary/20 flex items-center justify-center">
-              <Users className="h-4 w-4 text-primary" />
-            </div>
-          </CardHeader>
-          <CardContent>
-            <div className="text-2xl md:text-3xl font-bold text-foreground">
-              <CountUp value={participants.length} />
-            </div>
-          </CardContent>
-        </Card>
-        <Card>
-          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-            <CardTitle className="text-sm font-semibold text-muted-foreground">Matches Completed</CardTitle>
-            <div className="w-8 h-8 rounded-full bg-secondary/20 flex items-center justify-center">
-              <Trophy className="h-4 w-4 text-secondary" />
-            </div>
-          </CardHeader>
-          <CardContent>
-            <div className="text-2xl md:text-3xl font-bold text-foreground">
-              <CountUp value={matches.filter((m) => m.status === 'completed' || m.status === 'settled').length} /> <span className="text-muted-foreground text-lg">/ {matches.length}</span>
-            </div>
-          </CardContent>
-        </Card>
-        <Card>
-          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-            <CardTitle className="text-sm font-semibold text-muted-foreground">Total Bets</CardTitle>
-            <div className="w-8 h-8 rounded-full bg-blue-500/20 flex items-center justify-center">
-              <Activity className="h-4 w-4 text-blue-400" />
-            </div>
-          </CardHeader>
-          <CardContent>
-            <div className="text-2xl md:text-3xl font-bold text-foreground">
-              <CountUp value={matchBets.length + miscBets.length} />
-            </div>
-          </CardContent>
-        </Card>
-        <Card>
-          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-            <CardTitle className="text-sm font-semibold text-muted-foreground">Total Amount</CardTitle>
-            <div className="w-8 h-8 rounded-full bg-warning/20 flex items-center justify-center">
-              <TrendingUp className="h-4 w-4 text-warning" />
-            </div>
-          </CardHeader>
-          <CardContent>
-            <div className="text-2xl md:text-3xl font-bold font-mono text-foreground">
-              <CountUp value={totalPool} prefix="₹" />
-            </div>
-          </CardContent>
-        </Card>
-      </div>
-
-      <div className="grid gap-6 md:grid-cols-3">
-        {/* Standings */}
-        <Card className="md:col-span-2">
-          <CardHeader>
-            <CardTitle className="text-lg font-bold flex items-center gap-2">
-              <Trophy className="w-5 h-5 text-warning" />
-              Standings
-            </CardTitle>
-          </CardHeader>
-          <CardContent className="p-0">
-            <div className="hidden md:block">
-              <table className="w-full text-sm text-left">
-                <thead className="text-xs text-muted-foreground uppercase bg-surface/50 border-b border-border">
-                  <tr>
-                    <th className="px-6 py-4 font-medium text-center w-16">Rank</th>
-                    <th className="px-6 py-4 font-medium">Participant</th>
-                    <th className="px-6 py-4 font-medium text-right">P/L</th>
-                    <th className="px-6 py-4 font-medium text-right">Win Rate</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {leaderboard.length === 0 ? (
-                    <tr>
-                      <td colSpan={4} className="px-6 py-8 text-center text-muted-foreground">
-                        No activity yet — place your first bet to get started
-                      </td>
-                    </tr>
-                  ) : (
-                    leaderboard.map((entry, index) => (
-                      <tr key={entry.participant_id} className="border-b border-border/50 hover:bg-surface/30 transition-colors group">
-                        <td className="px-6 py-4 text-center">
-                          {index === 0 ? (
-                            <div className="flex justify-center"><Crown className="w-5 h-5 text-warning" /></div>
-                          ) : (
-                            <span className="text-muted-foreground font-medium">{index + 1}</span>
-                          )}
-                        </td>
-                        <td className="px-6 py-4">
-                          <div className="flex items-center gap-3">
-                            <div className={cn("w-8 h-8 rounded-full flex items-center justify-center font-bold text-xs tracking-wide shrink-0", getAvatarColor(entry.name))}>
-                              {entry.name.charAt(0).toUpperCase()}
-                            </div>
-                            <span className={cn("font-bold truncate max-w-[120px]", index === 0 ? "text-warning" : getTextColor(entry.name))}>
-                              {entry.name}
-                            </span>
-                          </div>
-                        </td>
-                        <td className={cn("px-6 py-4 text-right font-mono font-bold", entry.total_pl > 0 ? 'text-success' : entry.total_pl < 0 ? 'text-danger' : 'text-muted-foreground')}>
-                          {entry.total_pl > 0 ? '+' : ''}{entry.total_pl.toLocaleString()}
-                        </td>
-                        <td className="px-6 py-4 text-right">
-                          <div className="flex items-center justify-end gap-2">
-                            <span className="text-muted-foreground">{entry.win_rate.toFixed(1)}%</span>
-                            <div className="w-16 h-1.5 bg-surface rounded-full overflow-hidden">
-                              <div className="h-full bg-primary" style={{ width: `${entry.win_rate}%` }} />
-                            </div>
-                          </div>
-                        </td>
-                      </tr>
-                    ))
-                  )}
-                </tbody>
-              </table>
-            </div>
-
-            {/* Mobile Standings View */}
-            <div className="md:hidden flex flex-col">
-              {leaderboard.length === 0 ? (
-                <div className="p-6 text-center text-muted-foreground text-sm">
-                  No activity yet — place your first bet to get started
+      {/* ── Hero Strip ── */}
+      <div className="hero-strip p-5 md:p-6 xl:p-8">
+        <div className="relative z-10 flex flex-col gap-6 lg:flex-row lg:items-center lg:gap-0">
+          {/* Leader */}
+          <div className="lg:w-[22%] lg:pr-6 min-w-0">
+            <p
+              className="text-[0.6875rem] font-bold mb-3"
+              style={{ color: '#F5A524', fontFamily: 'var(--font-mono)', letterSpacing: '0.22em', textTransform: 'uppercase' }}
+            >
+              Leading
+            </p>
+            {leader ? (
+              <div className="flex items-center gap-4 relative">
+                {/* Ambient glow behind name — purely decorative */}
+                <div className="leader-glow" />
+                <div className="relative z-10">
+                  <div
+                    className="text-lg md:text-xl xl:text-2xl font-bold leading-tight tracking-tight"
+                    style={{
+                      fontFamily: 'var(--font-heading)',
+                      color: '#F5A524',
+                    }}
+                  >
+                    {leader.name}
+                  </div>
+                  <div className="flex items-center gap-2 mt-2">
+                    <ArrowUp className="w-4 h-4" style={{ color: '#22C55E' }} />
+                    <span
+                      className="scoreboard-num text-lg xl:text-xl font-bold"
+                      style={{ color: '#22C55E' }}
+                    >
+                      +₹{leader.total_pl.toLocaleString()}
+                    </span>
+                    <span className="text-sm" style={{ color: '#4A5F75' }}>net P/L</span>
+                  </div>
                 </div>
-              ) : (
-                leaderboard.map((entry, index) => (
-                  <div key={entry.participant_id} className="flex items-center justify-between p-4 border-b border-border/50">
-                    <div className="flex items-center gap-3">
-                      <div className="w-6 flex justify-center">
-                        {index === 0 ? <Crown className="w-4 h-4 text-warning" /> : <span className="text-muted-foreground text-sm font-medium">{index + 1}</span>}
-                      </div>
-                      <div className={cn("w-8 h-8 rounded-full flex items-center justify-center font-bold text-xs tracking-wide shrink-0", getAvatarColor(entry.name))}>
-                        {entry.name.charAt(0).toUpperCase()}
-                      </div>
-                      <div className={cn("font-bold", getTextColor(entry.name))}>{entry.name}</div>
-                    </div>
-                    <div className="flex flex-col items-end">
-                      <span className={cn("font-mono font-bold text-sm", entry.total_pl > 0 ? 'text-success' : entry.total_pl < 0 ? 'text-danger' : 'text-muted-foreground')}>
-                        {entry.total_pl > 0 ? '+' : ''}{entry.total_pl.toLocaleString()}
-                      </span>
-                      <span className="text-xs text-muted-foreground">{entry.win_rate.toFixed(1)}% win</span>
-                    </div>
-                  </div>
-                ))
-              )}
-            </div>
-          </CardContent>
-        </Card>
+              </div>
+            ) : (
+              <p className="text-base" style={{ color: '#4A5F75' }}>No data yet — place your first bet</p>
+            )}
+          </div>
 
-        {/* Upcoming Match */}
-        <div className="space-y-6">
-          <Card>
-            <CardHeader>
-              <CardTitle className="text-lg font-bold flex items-center gap-2">
-                <CalendarDays className="w-5 h-5 text-primary" />
-                Upcoming Match
-              </CardTitle>
-            </CardHeader>
-            <CardContent>
-              {nextMatch ? (
-                <Link to={`/matches/${nextMatch.id}`} className="block group">
-                  <div className="p-5 rounded-xl bg-surface border border-border group-hover:border-primary/50 transition-all duration-300">
-                    <div className="flex justify-between items-center mb-4">
-                      <Badge variant="outline" className="border-border text-muted-foreground font-medium">Match {nextMatch.match_no}</Badge>
-                      <span className="text-xs font-medium text-muted-foreground">{format(new Date(nextMatch.match_date), 'MMM d')}</span>
-                    </div>
-                    <div className="flex flex-row justify-between items-center py-4 space-x-4">
-                      <div className="flex flex-col items-center flex-1">
-                        <TeamLogo team={nextMatch.team1} className="w-10 h-10 text-sm mb-2" fallbackColorClass="text-primary bg-primary/20" />
-                        <div className="text-sm font-bold text-center text-foreground line-clamp-2">{nextMatch.team1}</div>
-                      </div>
-                      <div className="px-2 py-1 rounded-full bg-background border border-border text-[10px] font-bold text-muted-foreground uppercase tracking-wider shrink-0">VS</div>
-                      <div className="flex flex-col items-center flex-1">
-                        <TeamLogo team={nextMatch.team2} className="w-10 h-10 text-sm mb-2" fallbackColorClass="text-secondary bg-secondary/20" />
-                        <div className="text-sm font-bold text-center text-foreground line-clamp-2">{nextMatch.team2}</div>
-                      </div>
-                    </div>
-                    <div className="mt-4 pt-4 border-t border-border/50 text-xs text-center text-muted-foreground font-medium flex items-center justify-center gap-2">
-                      <span>{nextMatch.match_time}</span>
-                      <span className="w-1 h-1 rounded-full bg-border" />
-                      <span>{nextMatch.venue}</span>
-                    </div>
-                  </div>
-                </Link>
-              ) : (
-                <div className="text-center py-8 text-muted-foreground text-sm">No matches available</div>
-              )}
-            </CardContent>
-          </Card>
+          {/* Dividers */}
+          <div className="hidden lg:block w-px self-stretch mr-6" style={{ background: 'linear-gradient(to bottom, transparent, rgba(255,255,255,0.1), transparent)' }} />
+          <div className="block lg:hidden h-px" style={{ background: 'linear-gradient(to right, transparent, rgba(255,255,255,0.1), transparent)' }} />
+
+          {/* Stat pills */}
+          <div className="lg:w-[78%] flex flex-wrap items-center gap-3">
+            <StatPill icon={<Users className="w-3.5 h-3.5" />} label="Players" value={participants.length} color="teal" />
+            <StatPill 
+              icon={<Trophy className="w-3.5 h-3.5" />} 
+              label="Played" 
+              value={`${completedMatches}/${matches.length}`} 
+              color="amber" 
+            />
+            
+            <StatPill 
+              icon={<Activity className="w-3.5 h-3.5" />} 
+              label="Main Bets" 
+              value={matchBets.length} 
+              subValue={`${matchBets.filter(b => b.result === 'pending').length} pending`}
+              color="teal" 
+            />
+
+            <StatPill 
+              icon={<Activity className="w-3.5 h-3.5" />} 
+              label="Side Bets" 
+              value={miscBets.length} 
+              subValue={`${miscBets.filter(b => b.status === 'pending').length} pending`}
+              color="amber" 
+            />
+
+            <StatPill icon={<TrendingUp className="w-3.5 h-3.5" />} label="Pool" value={`₹${totalPool.toLocaleString()}`} color="amber" mono />
+          </div>
         </div>
       </div>
 
-      {/* Winning Bets Summary — Two-Tab Card */}
-      <Card className="overflow-hidden">
-        <CardHeader
-          className="flex flex-row items-center justify-between cursor-pointer hover:bg-surface/30 transition-colors py-4 bg-surface/10"
+      {/* ── Main Grid ── */}
+      <div className="grid gap-6 xl:grid-cols-3">
+        {/* Standings */}
+        <div className="xl:col-span-2 space-y-3">
+          <div className="flex items-center gap-2.5 mb-4">
+            <Trophy className="w-5 h-5" style={{ color: '#F5A524' }} />
+            <h2 className="section-header text-xl">Standings</h2>
+          </div>
+
+          {leaderboard.length === 0 ? (
+            <div className="empty-state">
+              <Trophy className="w-10 h-10" style={{ color: '#2A3F55' }} />
+              <p className="text-base" style={{ color: '#4A5F75' }}>No activity yet — place your first bet to get started</p>
+            </div>
+          ) : (
+            <div className="space-y-2.5">
+              {leaderboard.map((entry, index) => (
+                <div key={entry.participant_id} className={cn(index === 0 ? 'rank-card-top' : 'rank-card')}>
+                  <div className="flex items-center gap-4">
+                    {/* Rank */}
+                    <div className="w-8 flex justify-center shrink-0">
+                      {index === 0 ? (
+                        <Crown className="w-5 h-5" style={{ color: '#F5A524' }} />
+                      ) : (
+                        <span className="text-sm font-bold scoreboard-num" style={{ color: '#4A5F75' }}>
+                          {index + 1}
+                        </span>
+                      )}
+                    </div>
+                    {/* Avatar */}
+                    <div className={cn('w-10 h-10 rounded-full flex items-center justify-center font-black text-sm shrink-0', getAvatarColor(entry.name))}>
+                      {entry.name.charAt(0).toUpperCase()}
+                    </div>
+                    {/* Info */}
+                    <div className="flex-1 min-w-0">
+                      <div
+                        className="font-bold text-base truncate"
+                        style={{ fontFamily: 'var(--font-heading)', color: index === 0 ? '#F5A524' : '#E8EDF5' }}
+                      >
+                        {entry.name}
+                      </div>
+                      <div className="flex items-center gap-2.5 mt-1.5">
+                        <div className="win-bar-track">
+                          <div className="win-bar-fill" style={{ width: `${entry.win_rate}%` }} />
+                        </div>
+                        <span className="text-xs" style={{ color: '#4A5F75' }}>
+                          {entry.win_rate.toFixed(0)}% win · {entry.matches_played} played
+                        </span>
+                      </div>
+                    </div>
+                    {/* W / L */}
+                    <div className="flex gap-4 items-center shrink-0 mr-4 hidden sm:flex">
+                      <div className="text-center">
+                        <div className="text-sm font-bold scoreboard-num" style={{ color: '#22C55E' }}>{entry.wins}</div>
+                        <div className="text-xs" style={{ color: '#2A3F55' }}>W</div>
+                      </div>
+                      <div className="text-center">
+                        <div className="text-sm font-bold scoreboard-num" style={{ color: '#EF4444' }}>{entry.losses}</div>
+                        <div className="text-xs" style={{ color: '#2A3F55' }}>L</div>
+                      </div>
+                    </div>
+                    {/* P/L */}
+                    <div className="text-right shrink-0">
+                      <div
+                        className={cn(
+                          'scoreboard-num text-base font-bold',
+                          entry.total_pl > 0 ? 'pl-positive' : entry.total_pl < 0 ? 'pl-negative' : 'pl-neutral'
+                        )}
+                      >
+                        {entry.total_pl > 0 ? '+' : ''}₹{entry.total_pl.toLocaleString()}
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              ))}
+            </div>
+          )}
+        </div>
+
+        {/* Next Match */}
+        <div className="space-y-3">
+          <div className="flex items-center gap-2.5 mb-4">
+            <CalendarDays className="w-5 h-5" style={{ color: '#00D4C8' }} />
+            <h2 className="section-header text-xl">Next Match</h2>
+          </div>
+
+          {nextMatch ? (
+            <Link to={`/matches/${nextMatch.id}`} className="block">
+              <div className="upcoming-card p-5 md:p-6">
+                {/* Match no + date */}
+                <div className="flex justify-between items-center mb-6">
+                  <span className="status-pill status-pill--upcoming">Match {nextMatch.match_no}</span>
+                  <span className="text-sm" style={{ color: '#4A5F75' }}>
+                    {format(new Date(nextMatch.match_date), 'MMM d')}
+                  </span>
+                </div>
+
+                {/* Teams */}
+                <div className="flex items-center justify-between gap-2 py-2">
+                  <div className="flex flex-col items-center flex-1 text-center gap-2.5">
+                    <TeamLogo team={nextMatch.team1} className="w-14 h-14 text-xl" fallbackColorClass="text-primary bg-primary/10" />
+                    <div
+                      className="text-sm font-bold leading-tight"
+                      style={{ fontFamily: 'var(--font-heading)', color: '#E8EDF5' }}
+                    >
+                      {nextMatch.team1}
+                    </div>
+                  </div>
+                  <div className="vs-divider shrink-0">
+                    <div className="vs-badge">VS</div>
+                  </div>
+                  <div className="flex flex-col items-center flex-1 text-center gap-2.5">
+                    <TeamLogo team={nextMatch.team2} className="w-14 h-14 text-xl" fallbackColorClass="text-secondary bg-secondary/10" />
+                    <div
+                      className="text-sm font-bold leading-tight"
+                      style={{ fontFamily: 'var(--font-heading)', color: '#E8EDF5' }}
+                    >
+                      {nextMatch.team2}
+                    </div>
+                  </div>
+                </div>
+
+                {/* Meta */}
+                <div
+                  className="mt-5 pt-4 flex items-center justify-center gap-2 text-xs"
+                  style={{ borderTop: '1px solid rgba(255,255,255,0.05)', color: '#4A5F75' }}
+                >
+                  <span>{nextMatch.match_time}</span>
+                  <span className="w-1 h-1 rounded-full" style={{ background: '#2A3F55' }} />
+                  <span className="truncate">{nextMatch.venue}</span>
+                </div>
+              </div>
+            </Link>
+          ) : (
+            <div className="empty-state">
+              <CalendarDays className="w-10 h-10" style={{ color: '#2A3F55' }} />
+              <p className="text-base" style={{ color: '#4A5F75' }}>No upcoming matches</p>
+            </div>
+          )}
+        </div>
+      </div>
+
+      {/* ── Winning Bets Summary ── */}
+      <div className="rr-card overflow-hidden">
+        <button
+          className="w-full flex items-center justify-between px-6 py-5 transition-colors hover:bg-white/[0.02] cursor-pointer"
+          style={{ borderBottom: isWinnersTableOpen ? '1px solid rgba(255,255,255,0.05)' : 'none' }}
           onClick={() => setIsWinnersTableOpen(!isWinnersTableOpen)}
         >
-          <CardTitle className="text-lg font-bold flex items-center gap-2">
-            <Trophy className="w-5 h-5 text-warning" />
-            Winning Bets Summary
-          </CardTitle>
-          <button className="p-1 rounded-md hover:bg-white/10 text-muted-foreground transition-colors">
-            {isWinnersTableOpen ? <ChevronUp className="w-5 h-5" /> : <ChevronDown className="w-5 h-5" />}
-          </button>
-        </CardHeader>
+          <div className="flex items-center gap-3">
+            <Trophy className="w-5 h-5" style={{ color: '#F5A524' }} />
+            <span className="section-header text-lg">Winning Bets Summary</span>
+          </div>
+          <div className="flex items-center gap-3">
+            <span className="text-sm" style={{ color: '#4A5F75' }}>
+              {winningBets.length} won · {miscBets.filter((b) => b.status === 'settled').length} settled
+            </span>
+            {isWinnersTableOpen
+              ? <ChevronUp className="w-5 h-5" style={{ color: '#4A5F75' }} />
+              : <ChevronDown className="w-5 h-5" style={{ color: '#4A5F75' }} />}
+          </div>
+        </button>
 
         {isWinnersTableOpen && (
           <div className="animate-in slide-in-from-top-2 duration-200">
-            {/* Tab Bar */}
-            <div className="flex border-b border-border bg-surface/5">
-              <button
-                onClick={() => setActiveTab('main')}
-                className={cn(
-                  'flex-1 py-3 text-sm font-semibold transition-colors relative',
-                  activeTab === 'main'
-                    ? 'text-foreground'
-                    : 'text-muted-foreground hover:text-foreground'
-                )}
-              >
-                Main Bets
-                <span className="ml-2 text-xs bg-surface px-1.5 py-0.5 rounded-full border border-border">
-                  {winningBets.length}
-                </span>
-                {activeTab === 'main' && (
-                  <span className="absolute bottom-0 left-0 right-0 h-0.5 bg-primary" />
-                )}
-              </button>
-              <button
-                onClick={() => setActiveTab('side')}
-                className={cn(
-                  'flex-1 py-3 text-sm font-semibold transition-colors relative',
-                  activeTab === 'side'
-                    ? 'text-foreground'
-                    : 'text-muted-foreground hover:text-foreground'
-                )}
-              >
-                Side Bets
-                <span className="ml-2 text-xs bg-surface px-1.5 py-0.5 rounded-full border border-border">
-                  {miscBets.filter((b) => b.status === 'settled').length}
-                </span>
-                {activeTab === 'side' && (
-                  <span className="absolute bottom-0 left-0 right-0 h-0.5 bg-primary" />
-                )}
-              </button>
+            {/* Tabs */}
+            <div className="flex" style={{ borderBottom: '1px solid rgba(255,255,255,0.05)', background: 'rgba(255,255,255,0.01)' }}>
+              {(['main', 'side'] as const).map((tab) => {
+                const label = tab === 'main' ? 'Main Bets' : 'Side Bets';
+                const count = tab === 'main' ? winningBets.length : miscBets.filter((b) => b.status === 'settled').length;
+                const active = activeTab === tab;
+                return (
+                  <button
+                    key={tab}
+                    onClick={() => setActiveTab(tab)}
+                    className="flex-1 py-3.5 text-sm font-semibold transition-colors relative cursor-pointer"
+                    style={{ color: active ? '#E8EDF5' : '#4A5F75', fontFamily: 'var(--font-heading)', fontSize: '0.9375rem' }}
+                  >
+                    {label}
+                    <span
+                      className="ml-2 text-xs px-2 py-0.5 rounded-full font-bold"
+                      style={{
+                        background: active ? 'rgba(0,212,200,0.12)' : 'rgba(255,255,255,0.04)',
+                        color: active ? '#00D4C8' : '#4A5F75',
+                        border: `1px solid ${active ? 'rgba(0,212,200,0.2)' : 'rgba(255,255,255,0.06)'}`,
+                      }}
+                    >
+                      {count}
+                    </span>
+                    {active && <span className="tab-indicator" />}
+                  </button>
+                );
+              })}
             </div>
 
             {/* Main Bets Tab */}
             {activeTab === 'main' && (
-              <CardContent className="p-0">
-                <div className="overflow-x-auto">
-                  <table className="w-full text-sm text-left">
-                    <thead className="text-xs text-muted-foreground uppercase bg-surface/30 border-b border-border">
-                      <tr>
-                        <th className="px-6 py-4 font-medium">Match No</th>
-                        <th className="px-6 py-4 font-medium">Teams (Team 1 vs Team 2)</th>
-                        <th className="px-6 py-4 font-medium">Match Winner</th>
-                        <th className="px-6 py-4 font-medium">Bet Winner</th>
-                        <th className="px-6 py-4 font-medium text-right">Amount Won</th>
-                      </tr>
-                    </thead>
-                    <tbody>
-                      {winningBets.length === 0 ? (
-                        <tr>
-                          <td colSpan={5} className="px-6 py-8 text-center text-muted-foreground">
-                            No winning bets have been settled yet.
-                          </td>
-                        </tr>
-                      ) : (
-                        winningBets.map((bet) => (
-                          <tr key={bet.id} className="border-b border-border/50 hover:bg-surface/30 transition-colors">
-                            <td className="px-6 py-4 font-medium text-muted-foreground">Match {bet.match_no}</td>
-                            <td className="px-6 py-4 text-foreground">
-                              <div className="flex flex-col gap-1">
-                                <span>{bet.team1} {bet.team1_score && <span className="text-muted-foreground text-[10px] font-mono ml-1 bg-surface/50 border border-border py-0.5 px-1.5 rounded">{bet.team1_score}</span>}</span>
-                                <span className="text-muted-foreground text-xs px-1">vs</span>
-                                <span>{bet.team2} {bet.team2_score && <span className="text-muted-foreground text-[10px] font-mono ml-1 bg-surface/50 border border-border py-0.5 px-1.5 rounded">{bet.team2_score}</span>}</span>
-                              </div>
-                            </td>
-                            <td className="px-6 py-4 text-success font-bold">
-                              <div className="flex items-center gap-1.5">
-                                <Trophy className="w-3.5 h-3.5" />
-                                {bet.matchWinnerName}
-                              </div>
-                            </td>
-                            <td className={cn("px-6 py-4 font-bold", getTextColor(bet.participantName))}>
-                              <div className="flex items-center gap-2">
-                                <div className={cn("w-6 h-6 rounded-full flex items-center justify-center text-xs uppercase shrink-0", getAvatarColor(bet.participantName))}>
-                                  {bet.participantName.charAt(0)}
-                                </div>
-                                {bet.participantName}
-                              </div>
-                            </td>
-                            <td className="px-6 py-4 text-right font-mono font-bold text-success">
-                              +₹{bet.amountWon.toLocaleString()}
-                            </td>
-                          </tr>
-                        ))
-                      )}
-                    </tbody>
-
-                  </table>
-                </div>
-              </CardContent>
+              <div>
+                {winningBets.length === 0 ? (
+                  <div className="empty-state m-6">
+                    <Trophy className="w-9 h-9" style={{ color: '#2A3F55' }} />
+                    <p className="text-base" style={{ color: '#4A5F75' }}>No winning bets settled yet.</p>
+                  </div>
+                ) : (
+                  <>
+                    <div
+                      className="hidden md:grid grid-cols-[90px_1fr_160px_160px_120px] px-6 py-3 text-xs font-black uppercase tracking-widest"
+                      style={{ color: '#4A5F75', borderBottom: '1px solid rgba(255,255,255,0.04)', fontFamily: 'var(--font-heading)' }}
+                    >
+                      <span>Match</span>
+                      <span>Teams</span>
+                      <span>Match Winner</span>
+                      <span>Bet Winner</span>
+                      <span className="text-right">Amount Won</span>
+                    </div>
+                    {winningBets.map((bet) => (
+                      <div key={bet.id} className="bet-strip bet-strip--win">
+                        <div className="hidden md:grid grid-cols-[90px_1fr_160px_160px_120px] items-center gap-3">
+                          <span className="text-sm scoreboard-num font-bold" style={{ color: '#4A5F75' }}>#{bet.match_no}</span>
+                          <div className="text-sm" style={{ color: '#7A90A8' }}>
+                            <div>{bet.team1} {bet.team1_score && <span className="scoreboard-num text-xs" style={{ color: '#4A5F75' }}>({bet.team1_score})</span>}</div>
+                            <div className="text-xs my-0.5" style={{ color: '#2A3F55' }}>vs</div>
+                            <div>{bet.team2} {bet.team2_score && <span className="scoreboard-num text-xs" style={{ color: '#4A5F75' }}>({bet.team2_score})</span>}</div>
+                          </div>
+                          <div className="flex items-center gap-2">
+                            <Trophy className="w-3.5 h-3.5" style={{ color: '#22C55E' }} />
+                            <span className="text-sm font-semibold" style={{ color: '#22C55E' }}>{bet.matchWinnerName}</span>
+                          </div>
+                          <div className="flex items-center gap-2">
+                            <div className={cn('w-7 h-7 rounded-full flex items-center justify-center text-xs font-bold shrink-0', getAvatarColor(bet.participantName))}>
+                              {bet.participantName.charAt(0)}
+                            </div>
+                            <span className="text-sm font-semibold" style={{ color: '#E8EDF5' }}>{bet.participantName}</span>
+                          </div>
+                          <div className="text-right scoreboard-num text-base font-bold" style={{ color: '#22C55E' }}>
+                            +₹{bet.amountWon.toLocaleString()}
+                          </div>
+                        </div>
+                        {/* Mobile */}
+                        <div className="md:hidden space-y-2">
+                          <div className="flex justify-between items-start">
+                            <div>
+                              <span className="text-xs scoreboard-num font-bold" style={{ color: '#4A5F75' }}>Match #{bet.match_no}</span>
+                              <div className="text-sm mt-0.5 font-medium" style={{ color: '#7A90A8' }}>{bet.team1} vs {bet.team2}</div>
+                            </div>
+                            <span className="scoreboard-num text-lg font-bold" style={{ color: '#22C55E' }}>+₹{bet.amountWon.toLocaleString()}</span>
+                          </div>
+                          <div className="flex items-center gap-3 text-sm">
+                            <span style={{ color: '#4A5F75' }}>Won by: <span style={{ color: '#22C55E', fontWeight: 600 }}>{bet.matchWinnerName}</span></span>
+                            <span style={{ color: '#2A3F55' }}>·</span>
+                            <span style={{ color: '#4A5F75' }}>Bettor: <span style={{ color: '#E8EDF5', fontWeight: 600 }}>{bet.participantName}</span></span>
+                          </div>
+                        </div>
+                      </div>
+                    ))}
+                  </>
+                )}
+              </div>
             )}
 
             {/* Side Bets Tab */}
             {activeTab === 'side' && (
-              <CardContent className="p-0">
+              <div>
                 {sideBetsByMatch.length === 0 ? (
-                  <div className="px-6 py-8 text-center text-muted-foreground text-sm">
-                    No settled side bets yet.
+                  <div className="empty-state m-6">
+                    <Activity className="w-9 h-9" style={{ color: '#2A3F55' }} />
+                    <p className="text-base" style={{ color: '#4A5F75' }}>No settled side bets yet.</p>
                   </div>
                 ) : (
-                  <div className="overflow-x-auto">
-                    <table className="w-full text-sm text-left">
-                      <thead className="text-xs text-muted-foreground uppercase bg-surface/30 border-b border-border">
-                        <tr>
-                          <th className="px-6 py-4 font-medium">Bet Title</th>
-                          <th className="px-6 py-4 font-medium">Winner</th>
-                          <th className="px-6 py-4 font-medium">Loser</th>
-                          <th className="px-6 py-4 font-medium text-right">Amount</th>
-                        </tr>
-                      </thead>
-                      <tbody>
-                        {sideBetsByMatch.map((group) => {
-                          const groupTotal = group.bets.reduce((acc, b) => acc + b.amount, 0);
-                          return (
-                            <>
-                              {/* Match group header */}
-                              <tr key={`header-${group.matchLabel}`} className="bg-surface/40 border-b border-border/50">
-                                <td colSpan={4} className="px-6 py-2">
-                                  <span className="text-xs font-bold text-muted-foreground uppercase tracking-wider">{group.matchLabel}</span>
-                                </td>
-                              </tr>
-                              {group.bets.map((bet) => {
-                                const winner = participants.find((p) => p.id === bet.winner_participant_id);
-                                const loser = participants.find((p) => p.id === bet.loser_participant_id);
-                                return (
-                                  <tr key={bet.id} className="border-b border-border/30 hover:bg-surface/20 transition-colors">
-                                    <td className="px-6 py-3 font-medium text-foreground">{bet.title}</td>
-                                    <td className="px-6 py-3">
-                                      <div className="flex items-center gap-2">
-                                        <div className={cn('w-5 h-5 rounded-full flex items-center justify-center font-bold text-[10px] shrink-0', getAvatarColor(winner?.name || ''))}>
-                                          {winner?.name?.charAt(0).toUpperCase() || '?'}
-                                        </div>
-                                        <span className={cn('font-semibold text-xs', getTextColor(winner?.name || ''))}>{winner?.name}</span>
-                                      </div>
-                                    </td>
-                                    <td className="px-6 py-3">
-                                      <div className="flex items-center gap-2">
-                                        <div className={cn('w-5 h-5 rounded-full flex items-center justify-center font-bold text-[10px] shrink-0 opacity-60', getAvatarColor(loser?.name || ''))}>
-                                          {loser?.name?.charAt(0).toUpperCase() || '?'}
-                                        </div>
-                                        <span className="text-xs text-muted-foreground">{loser?.name}</span>
-                                      </div>
-                                    </td>
-                                    <td className="px-6 py-3 text-right font-mono font-bold">₹{bet.amount.toLocaleString()}</td>
-                                  </tr>
-                                );
-                              })}
-                              {/* Per-match per-person breakdown */}
-                              <tr key={`subtotal-${group.matchLabel}`} className="border-b border-border bg-surface/10">
-                                <td colSpan={4} className="px-6 py-3">
-                                  <div className="flex flex-wrap items-center justify-end gap-x-6 gap-y-2">
-                                    <span className="text-xs font-bold text-muted-foreground uppercase tracking-wider mr-auto">
-                                      Match Summary
-                                    </span>
-                                    {group.participantPL.map((item) => (
-                                      <div key={item.participantName} className="flex items-center gap-2">
-                                        <div className={cn("w-5 h-5 rounded-full flex items-center justify-center text-[10px] font-bold shrink-0", getAvatarColor(item.participantName))}>
-                                          {item.participantName.charAt(0)}
-                                        </div>
-                                        <span className={cn("text-xs font-semibold", getTextColor(item.participantName))}>
-                                          {item.participantName}:
-                                        </span>
-                                        <span className={cn("text-xs font-mono font-bold", item.totalPL > 0 ? "text-success" : item.totalPL < 0 ? "text-danger" : "text-muted-foreground")}>
-                                          {item.totalPL > 0 ? "+" : ""}{item.totalPL.toLocaleString()}
-                                        </span>
-                                      </div>
-                                    ))}
+                  sideBetsByMatch.map((group) => (
+                    <div key={group.matchLabel}>
+                      <div
+                        className="px-6 py-2.5 text-xs font-black uppercase tracking-widest"
+                        style={{ color: '#4A5F75', background: 'rgba(255,255,255,0.015)', borderBottom: '1px solid rgba(255,255,255,0.04)', fontFamily: 'var(--font-heading)' }}
+                      >
+                        {group.matchLabel}
+                      </div>
+                      {group.bets.map((bet) => {
+                        const winner = participants.find((p) => p.id === bet.winner_participant_id);
+                        const loser = participants.find((p) => p.id === bet.loser_participant_id);
+                        return (
+                          <div key={bet.id} className="bet-strip">
+                            <div className="flex items-center justify-between gap-3">
+                              <div className="flex-1 min-w-0">
+                                <div className="text-base font-semibold truncate" style={{ color: '#E8EDF5' }}>{bet.title}</div>
+                                <div className="flex items-center gap-4 mt-1.5">
+                                  <div className="flex items-center gap-1.5">
+                                    <div className={cn('w-5 h-5 rounded-full flex items-center justify-center text-xs font-bold shrink-0', getAvatarColor(winner?.name || ''))}>
+                                      {winner?.name?.charAt(0).toUpperCase() || '?'}
+                                    </div>
+                                    <span className="text-sm font-semibold" style={{ color: '#22C55E' }}>{winner?.name}</span>
                                   </div>
-                                </td>
-                              </tr>
-                            </>
-                          );
-                        })}
-                      </tbody>
-
-                    </table>
-                  </div>
+                                  <span className="text-xs" style={{ color: '#2A3F55' }}>vs</span>
+                                  <div className="flex items-center gap-1.5">
+                                    <div className={cn('w-5 h-5 rounded-full flex items-center justify-center text-xs font-bold shrink-0 opacity-60', getAvatarColor(loser?.name || ''))}>
+                                      {loser?.name?.charAt(0).toUpperCase() || '?'}
+                                    </div>
+                                    <span className="text-sm" style={{ color: '#4A5F75' }}>{loser?.name}</span>
+                                  </div>
+                                </div>
+                              </div>
+                              <span className="scoreboard-num text-base font-bold shrink-0" style={{ color: '#E8EDF5' }}>
+                                ₹{bet.amount.toLocaleString()}
+                              </span>
+                            </div>
+                          </div>
+                        );
+                      })}
+                      <div
+                        className="px-6 py-3.5 flex flex-wrap gap-x-8 gap-y-2 items-center"
+                        style={{ background: 'rgba(255,255,255,0.01)', borderTop: '1px solid rgba(255,255,255,0.04)' }}
+                      >
+                        <span className="text-xs font-black uppercase tracking-widest mr-auto" style={{ color: '#2A3F55', fontFamily: 'var(--font-heading)' }}>
+                          Match P/L
+                        </span>
+                        {group.participantPL.map((item) => (
+                          <div key={item.participantName} className="flex items-center gap-2">
+                            <div className={cn('w-5 h-5 rounded-full flex items-center justify-center text-xs font-bold shrink-0', getAvatarColor(item.participantName))}>
+                              {item.participantName.charAt(0)}
+                            </div>
+                            <span className="text-sm font-medium" style={{ color: '#7A90A8' }}>{item.participantName}:</span>
+                            <span
+                              className="text-sm scoreboard-num font-bold"
+                              style={{ color: item.totalPL > 0 ? '#22C55E' : item.totalPL < 0 ? '#EF4444' : '#4A5F75' }}
+                            >
+                              {item.totalPL > 0 ? '+' : ''}₹{item.totalPL.toLocaleString()}
+                            </span>
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+                  ))
                 )}
-              </CardContent>
+              </div>
             )}
           </div>
         )}
-      </Card>
+      </div>
+    </div>
+  );
+}
+
+/* ── Stat Pill ── */
+function StatPill({
+  icon, label, value, color, mono, subValue
+}: {
+  icon: React.ReactNode;
+  label: string;
+  value: string | number;
+  color: 'teal' | 'amber';
+  mono?: boolean;
+  subValue?: string;
+}) {
+  const isTeal = color === 'teal';
+  return (
+    <div
+      className="flex items-center gap-2.5 px-3.5 py-2.5 rounded-lg flex-1 min-w-[max-content]"
+      style={{
+        background: 'rgba(255,255,255,0.035)',
+        border: '1px solid rgba(255,255,255,0.08)',
+        boxShadow: 'inset 0 1px 0 rgba(255,255,255,0.02), 0 2px 8px rgba(0,0,0,0.2)'
+      }}
+    >
+      <div style={{ color: isTeal ? 'rgba(0,212,200,0.65)' : 'rgba(245,165,36,0.65)' }}>{icon}</div>
+      <div>
+        <div
+          className="field-label whitespace-nowrap"
+          style={{ color: '#4A5F75' }}
+        >
+          {label}
+        </div>
+        <div className="flex items-baseline gap-2 mt-0.5">
+          <div
+            className="text-sm font-bold whitespace-nowrap"
+            style={{ color: '#E8EDF5', fontFamily: mono ? 'var(--font-mono)' : 'var(--font-heading)' }}
+          >
+            {typeof value === 'number' ? <CountUp value={value} /> : value}
+          </div>
+          {subValue && (
+            <div className="text-[10px] whitespace-nowrap" style={{ color: '#F5A524' }}>
+              {subValue}
+            </div>
+          )}
+        </div>
+      </div>
     </div>
   );
 }

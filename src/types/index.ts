@@ -32,8 +32,8 @@ export interface MatchBet {
 export interface MiscBet {
   id: string;
   title: string;
-  winner_participant_id: string;
-  loser_participant_id: string;
+  winner_participant_id?: string | null;
+  loser_participant_id?: string | null;
   amount: number;
   status: 'pending' | 'settled';
   match_id?: string | null;
