@@ -1,12 +1,14 @@
 import { useStore } from '../store/useStore';
-import { Trophy, TrendingUp, Users, Activity, CalendarDays, Crown, ChevronDown, ChevronUp, ArrowUp } from 'lucide-react';
+import { Trophy, TrendingUp, Users, Activity, CalendarDays, Crown, ChevronDown, ChevronUp, ArrowUp, BarChart2, List } from 'lucide-react';
 import { useMemo, useState } from 'react';
+import React from 'react';
 import { LeaderboardEntry } from '../types';
 import { Link } from 'react-router-dom';
 import { format } from 'date-fns';
 import { cn, getAvatarColor } from '../lib/utils';
 import { CountUp } from '../components/ui/count-up';
 import { TeamLogo } from '../components/TeamLogo';
+import { MomentumChart } from '../components/MomentumChart';
 
 export function Dashboard() {
   const { participants, matches, matchBets, miscBets } = useStore();
@@ -192,87 +194,88 @@ export function Dashboard() {
           </div>
         </div>
       </div>
-
       {/* ── Main Grid ── */}
-      <div className="grid gap-6 xl:grid-cols-3">
-        {/* Standings */}
-        <div className="xl:col-span-2 space-y-3">
-          <div className="flex items-center gap-2.5 mb-4">
-            <Trophy className="w-5 h-5" style={{ color: '#F5A524' }} />
-            <h2 className="section-header text-xl">Standings</h2>
-          </div>
-
-          {leaderboard.length === 0 ? (
-            <div className="empty-state">
-              <Trophy className="w-10 h-10" style={{ color: '#2A3F55' }} />
-              <p className="text-base" style={{ color: '#4A5F75' }}>No activity yet — place your first bet to get started</p>
+      <div className="flex flex-col xl:flex-row gap-6">
+        
+        {/* Left Column: Standings & Next Match */}
+        <div className="w-full xl:w-1/3 xl:min-w-[420px] flex flex-col gap-6">
+          
+          {/* Standings */}
+          <div className="space-y-3">
+            <div className="flex items-center gap-2.5 mb-4">
+              <Trophy className="w-5 h-5" style={{ color: '#F5A524' }} />
+              <h2 className="section-header text-xl">Standings</h2>
             </div>
-          ) : (
-            <div className="space-y-2.5">
-              {leaderboard.map((entry, index) => (
-                <div key={entry.participant_id} className={cn(index === 0 ? 'rank-card-top' : 'rank-card')}>
-                  <div className="flex items-center gap-4">
-                    {/* Rank */}
-                    <div className="w-8 flex justify-center shrink-0">
-                      {index === 0 ? (
-                        <Crown className="w-5 h-5" style={{ color: '#F5A524' }} />
-                      ) : (
-                        <span className="text-sm font-bold scoreboard-num" style={{ color: '#4A5F75' }}>
-                          {index + 1}
-                        </span>
-                      )}
-                    </div>
-                    {/* Avatar */}
-                    <div className={cn('w-10 h-10 rounded-full flex items-center justify-center font-black text-sm shrink-0', getAvatarColor(entry.name))}>
-                      {entry.name.charAt(0).toUpperCase()}
-                    </div>
-                    {/* Info */}
-                    <div className="flex-1 min-w-0">
-                      <div
-                        className="font-bold text-base truncate"
-                        style={{ fontFamily: 'var(--font-heading)', color: index === 0 ? '#F5A524' : '#E8EDF5' }}
-                      >
-                        {entry.name}
-                      </div>
-                      <div className="flex items-center gap-2.5 mt-1.5">
-                        <div className="win-bar-track">
-                          <div className="win-bar-fill" style={{ width: `${entry.win_rate}%` }} />
-                        </div>
-                        <span className="text-xs" style={{ color: '#4A5F75' }}>
-                          {entry.win_rate.toFixed(0)}% win · {entry.matches_played} played
-                        </span>
-                      </div>
-                    </div>
-                    {/* W / L */}
-                    <div className="flex gap-4 items-center shrink-0 mr-4 hidden sm:flex">
-                      <div className="text-center">
-                        <div className="text-sm font-bold scoreboard-num" style={{ color: '#22C55E' }}>{entry.wins}</div>
-                        <div className="text-xs" style={{ color: '#2A3F55' }}>W</div>
-                      </div>
-                      <div className="text-center">
-                        <div className="text-sm font-bold scoreboard-num" style={{ color: '#EF4444' }}>{entry.losses}</div>
-                        <div className="text-xs" style={{ color: '#2A3F55' }}>L</div>
-                      </div>
-                    </div>
-                    {/* P/L */}
-                    <div className="text-right shrink-0">
-                      <div
-                        className={cn(
-                          'scoreboard-num text-base font-bold',
-                          entry.total_pl > 0 ? 'pl-positive' : entry.total_pl < 0 ? 'pl-negative' : 'pl-neutral'
+
+            {leaderboard.length === 0 ? (
+              <div className="empty-state">
+                <Trophy className="w-10 h-10" style={{ color: '#2A3F55' }} />
+                <p className="text-base" style={{ color: '#4A5F75' }}>No activity yet — place your first bet to get started</p>
+              </div>
+            ) : (
+              <div className="space-y-2.5">
+                {leaderboard.map((entry, index) => (
+                  <div key={entry.participant_id} className={cn(index === 0 ? 'rank-card-top' : 'rank-card')}>
+                    <div className="flex items-center gap-4">
+                      {/* Rank */}
+                      <div className="w-8 flex justify-center shrink-0">
+                        {index === 0 ? (
+                          <Crown className="w-5 h-5" style={{ color: '#F5A524' }} />
+                        ) : (
+                          <span className="text-sm font-bold scoreboard-num" style={{ color: '#4A5F75' }}>
+                            {index + 1}
+                          </span>
                         )}
-                      >
-                        {entry.total_pl > 0 ? '+' : ''}₹{entry.total_pl.toLocaleString()}
+                      </div>
+                      {/* Avatar */}
+                      <div className={cn('w-10 h-10 rounded-full flex items-center justify-center font-black text-sm shrink-0', getAvatarColor(entry.name))}>
+                        {entry.name.charAt(0).toUpperCase()}
+                      </div>
+                      {/* Info */}
+                      <div className="flex-1 min-w-0">
+                        <div
+                          className="font-bold text-base truncate"
+                          style={{ fontFamily: 'var(--font-heading)', color: index === 0 ? '#F5A524' : '#E8EDF5' }}
+                        >
+                          {entry.name}
+                        </div>
+                        <div className="flex items-center gap-2.5 mt-1.5">
+                          <div className="win-bar-track">
+                            <div className="win-bar-fill" style={{ width: `${entry.win_rate}%` }} />
+                          </div>
+                          <span className="text-xs" style={{ color: '#4A5F75' }}>
+                            {entry.win_rate.toFixed(0)}% win · {entry.matches_played} played
+                          </span>
+                        </div>
+                      </div>
+                      {/* W / L */}
+                      <div className="flex gap-4 items-center shrink-0 mr-4 hidden sm:flex">
+                        <div className="text-center">
+                          <div className="text-sm font-bold scoreboard-num" style={{ color: '#22C55E' }}>{entry.wins}</div>
+                          <div className="text-xs" style={{ color: '#2A3F55' }}>W</div>
+                        </div>
+                        <div className="text-center">
+                          <div className="text-sm font-bold scoreboard-num" style={{ color: '#EF4444' }}>{entry.losses}</div>
+                          <div className="text-xs" style={{ color: '#2A3F55' }}>L</div>
+                        </div>
+                      </div>
+                      {/* P/L */}
+                      <div className="text-right shrink-0">
+                        <div
+                          className={cn(
+                            'scoreboard-num text-base font-bold',
+                            entry.total_pl > 0 ? 'pl-positive' : entry.total_pl < 0 ? 'pl-negative' : 'pl-neutral'
+                          )}
+                        >
+                          {entry.total_pl > 0 ? '+' : ''}₹{entry.total_pl.toLocaleString()}
+                        </div>
                       </div>
                     </div>
                   </div>
-                </div>
-              ))}
-            </div>
-          )}
-        </div>
-
-        {/* Next Match */}
+                ))}
+              </div>
+            )}
+          </div>
         <div className="space-y-3">
           <div className="flex items-center gap-2.5 mb-4">
             <CalendarDays className="w-5 h-5" style={{ color: '#00D4C8' }} />
@@ -332,6 +335,24 @@ export function Dashboard() {
               <p className="text-base" style={{ color: '#4A5F75' }}>No upcoming matches</p>
             </div>
           )}
+        </div>
+        </div>
+
+        {/* Right Column: Momentum Visual */}
+        <div className="w-full xl:w-2/3 flex flex-col min-w-0">
+          <div className="flex items-center gap-2.5 mb-4">
+            <BarChart2 className="w-5 h-5" style={{ color: '#00D4C8' }} />
+            <h2 className="section-header text-xl">Season Momentum</h2>
+          </div>
+          <div className="rr-card p-5 flex-1 animate-in fade-in duration-300">
+            <MomentumChart
+              matches={matches}
+              matchBets={matchBets}
+              miscBets={miscBets}
+              participants={participants}
+              leaderboard={leaderboard}
+            />
+          </div>
         </div>
       </div>
 
