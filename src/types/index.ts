@@ -14,7 +14,7 @@ export interface Match {
   match_time: string;
   stage: string;
   winner: string | null;
-  status: 'scheduled' | 'completed' | 'settled';
+  status: 'scheduled' | 'completed' | 'settled' | 'cancelled';
   team1_score?: string;
   team2_score?: string;
 }

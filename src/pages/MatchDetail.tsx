@@ -6,7 +6,7 @@ import { Button } from '../components/ui/button';
 import { Input } from '../components/ui/input';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '../components/ui/select';
 import { toast } from 'sonner';
-import { ArrowLeft, Plus, Trophy, Save, X, Trash2, Undo2, Edit2, ArrowUp, ArrowDown, Minus } from 'lucide-react';
+import { ArrowLeft, Plus, Trophy, Save, X, Trash2, Undo2, Edit2, ArrowUp, ArrowDown, Minus, ChevronUp, ChevronDown } from 'lucide-react';
 import { MatchBet, Match } from '../types';
 import { cn, getAvatarColor } from '../lib/utils';
 import { TeamLogo } from '../components/TeamLogo';
@@ -29,11 +29,15 @@ export function MatchDetail() {
   const [winner, setWinner] = useState<string>('');
   const [team1Score, setTeam1Score] = useState<string>('');
   const [team2Score, setTeam2Score] = useState<string>('');
-  
+
   // Confirmation states
   const [confirmDeleteMatch, setConfirmDeleteMatch] = useState(false);
   const [confirmDeleteBetId, setConfirmDeleteBetId] = useState<string | null>(null);
   const [confirmTimer, setConfirmTimer] = useState<NodeJS.Timeout | null>(null);
+
+  // Collapsible sections
+  const [isParticipantBetsExpanded, setIsParticipantBetsExpanded] = useState(true);
+  const [isSideBetsExpanded, setIsSideBetsExpanded] = useState(true);
 
   const suggestedAmount = useMemo(() => {
     if (!match) return 0;
@@ -55,7 +59,7 @@ export function MatchDetail() {
 
   useEffect(() => {
     if (match) {
-      setWinner(match.winner || '');
+      setWinner(match.status === 'cancelled' ? 'cancelled' : match.winner || '');
       setTeam1Score(match.team1_score || '');
       setTeam2Score(match.team2_score || '');
       setEditMatchData({
@@ -118,14 +122,25 @@ export function MatchDetail() {
       return;
     }
 
+    const isCancelled = winner === 'cancelled';
+    const finalStatus = isCancelled ? 'cancelled' : 'completed';
+
     try {
       const { error: matchError } = await supabase
         .from('matches')
-        .update({ winner, status: 'completed', team1_score: team1Score || null, team2_score: team2Score || null })
+        .update({
+          winner: isCancelled ? null : winner,
+          status: finalStatus,
+          team1_score: team1Score || null,
+          team2_score: team2Score || null
+        })
         .eq('id', match.id);
       if (matchError) throw matchError;
 
       const updates = bets.map((bet) => {
+        if (isCancelled) {
+          return { ...bet, result: 'pending', profit_loss: 0 };
+        }
         const isWin = bet.predicted_winner === winner;
         return { ...bet, result: isWin ? 'win' : 'loss', profit_loss: isWin ? bet.amount : -bet.amount };
       });
@@ -133,7 +148,7 @@ export function MatchDetail() {
         const { error: betsError } = await supabase.from('match_bets').upsert(updates);
         if (betsError) throw betsError;
       }
-      toast.success('Match settled successfully');
+      toast.success(isCancelled ? 'Match marked as No Result' : 'Match settled successfully');
       await Promise.all([fetchMatches(), fetchMatchBets()]);
     } catch (error: any) {
       toast.error(error.message || 'Failed to settle match');
@@ -174,7 +189,7 @@ export function MatchDetail() {
         result,
         profit_loss
       }).eq('id', editingBetId);
-      
+
       if (error) throw error;
       toast.success('Bet updated');
       setEditingBetId(null);
@@ -196,13 +211,13 @@ export function MatchDetail() {
     try {
       const betToDelete = bets.find(b => b.id === betId);
       let query = supabase.from('match_bets').delete();
-      
+
       if (betToDelete) {
         query = query.eq('match_id', betToDelete.match_id);
       } else {
         query = query.eq('id', betId);
       }
-      
+
       const { error } = await query;
       if (error) throw error;
       toast.success('Bets deleted');
@@ -246,7 +261,7 @@ export function MatchDetail() {
     }
   };
 
-  const isCompleted = match.status === 'completed' || match.status === 'settled';
+  const isCompleted = match.status === 'completed' || match.status === 'settled' || match.status === 'cancelled';
 
   return (
     <div className="space-y-6 page-enter">
@@ -280,13 +295,13 @@ export function MatchDetail() {
             onClick={handleDeleteMatch}
             className={cn(
               "h-8 rounded-full flex items-center justify-center transition-all duration-200 px-2 gap-1.5",
-              confirmDeleteMatch 
-                ? "bg-red-500 text-white w-auto" 
+              confirmDeleteMatch
+                ? "bg-red-500 text-white w-auto"
                 : "w-8 bg-white/[0.04] text-[#7A90A8]"
             )}
-            style={!confirmDeleteMatch ? { 
-              background: 'rgba(255,255,255,0.04)', 
-              color: '#7A90A8' 
+            style={!confirmDeleteMatch ? {
+              background: 'rgba(255,255,255,0.04)',
+              color: '#7A90A8'
             } : undefined}
             onMouseEnter={e => { if (!confirmDeleteMatch) { e.currentTarget.style.background = 'rgba(239,68,68,0.1)'; e.currentTarget.style.color = '#EF4444'; } }}
             onMouseLeave={e => { if (!confirmDeleteMatch) { e.currentTarget.style.background = 'rgba(255,255,255,0.04)'; e.currentTarget.style.color = '#7A90A8'; } }}
@@ -478,12 +493,13 @@ export function MatchDetail() {
               <Select value={winner} onValueChange={setWinner} disabled={isCompleted}>
                 <SelectTrigger className="bg-surface-light border-border/60 focus:ring-primary/40 h-10">
                   <SelectValue placeholder="Select winning team">
-                    {winner === 'team1' ? match.team1 : winner === 'team2' ? match.team2 : 'Select winning team'}
+                    {winner === 'team1' ? match.team1 : winner === 'team2' ? match.team2 : winner === 'cancelled' ? 'No Result (Cancelled)' : 'Select winning team'}
                   </SelectValue>
                 </SelectTrigger>
                 <SelectContent className="bg-surface-raised border-border/60">
                   <SelectItem value="team1" className="focus:bg-primary/10 focus:text-primary">{match.team1}</SelectItem>
                   <SelectItem value="team2" className="focus:bg-primary/10 focus:text-primary">{match.team2}</SelectItem>
+                  <SelectItem value="cancelled" className="focus:bg-primary/10 focus:text-amber-500">No Result (Cancelled)</SelectItem>
                 </SelectContent>
               </Select>
             </div>
@@ -520,271 +536,288 @@ export function MatchDetail() {
       {/* Participant Bets */}
       <div className="rr-card overflow-hidden">
         {/* Header */}
-        <div
-          className="px-5 py-3.5 flex items-center justify-between"
-          style={{ background: 'rgba(255,255,255,0.02)', borderBottom: '1px solid rgba(255,255,255,0.05)' }}
+        <button
+          onClick={() => setIsParticipantBetsExpanded(v => !v)}
+          className="w-full px-5 py-3.5 flex items-center justify-between cursor-pointer transition-colors duration-200 text-left"
+          style={{ background: isParticipantBetsExpanded ? 'rgba(255,255,255,0.02)' : 'rgba(0,0,0,0.2)', borderBottom: '1px solid rgba(255,255,255,0.05)' }}
         >
-          <span className="section-header text-lg">Participant Bets</span>
-          {match.status === 'scheduled' && (
-            <button
-              onClick={() => setIsAddingBet(true)}
-              className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold transition-all"
-              style={{
-                background: 'rgba(0,212,200,0.08)',
-                border: '1px solid rgba(0,212,200,0.2)',
-                color: '#00D4C8',
-                fontFamily: 'var(--font-heading)',
-              }}
-            >
-              <Plus className="w-3.5 h-3.5" />
-              Add Bet
-            </button>
-          )}
-        </div>
-
-        {/* Add Bet form */}
-        {isAddingBet && (
-          <div
-            className="p-4 animate-in slide-in-from-top-2 duration-200"
-            style={{ background: 'rgba(0,212,200,0.03)', borderBottom: '1px solid rgba(0,212,200,0.1)' }}
-          >
-            <div className="flex flex-col sm:flex-row gap-3 items-end">
-              <div className="space-y-1.5 flex-1">
-                <label className="text-[11px] font-semibold uppercase tracking-wider" style={{ color: '#4A5F75', fontFamily: 'var(--font-heading)' }}>Participant</label>
-                <Select value={newBet.participant_id} onValueChange={(v) => setNewBet({ ...newBet, participant_id: v })}>
-                  <SelectTrigger className="bg-surface-light border-border/60 h-9 text-sm">
-                    <SelectValue placeholder="Select participant">
-                      {participants.find(p => p.id === newBet.participant_id)?.name || 'Select participant'}
-                    </SelectValue>
-                  </SelectTrigger>
-                  <SelectContent className="bg-surface-raised border-border/60">
-                    {participants.filter(p => p.is_active).map((p) => (
-                      <SelectItem key={p.id} value={p.id} className="focus:bg-primary/10 focus:text-primary">{p.name}</SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
+          <div className="flex items-center gap-3">
+            <span className="section-header text-lg">Participant Bets</span>
+            {!isParticipantBetsExpanded && (
+              <span className="text-xs font-bold px-2 py-0.5 rounded-full" style={{ background: 'rgba(255,255,255,0.05)', color: '#7A90A8' }}>
+                {bets.length}
+              </span>
+            )}
+          </div>
+          <div className="flex items-center gap-3">
+            {match.status === 'scheduled' && isParticipantBetsExpanded && (
+              <div
+                onClick={(e) => { e.stopPropagation(); setIsAddingBet(true); }}
+                className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold transition-all hover:opacity-80"
+                style={{
+                  background: 'rgba(0,212,200,0.08)',
+                  border: '1px solid rgba(0,212,200,0.2)',
+                  color: '#00D4C8',
+                  fontFamily: 'var(--font-heading)',
+                }}
+              >
+                <Plus className="w-3.5 h-3.5" />
+                Add Bet
               </div>
-              <div className="space-y-1.5 flex-1">
-                <label className="text-[11px] font-semibold uppercase tracking-wider" style={{ color: '#4A5F75', fontFamily: 'var(--font-heading)' }}>Predicted Winner</label>
-                <Select value={newBet.predicted_winner} onValueChange={(v) => setNewBet({ ...newBet, predicted_winner: v })}>
-                  <SelectTrigger className="bg-surface-light border-border/60 h-9 text-sm">
-                    <SelectValue placeholder="Select team">
-                      {newBet.predicted_winner === 'team1' ? match.team1 : newBet.predicted_winner === 'team2' ? match.team2 : 'Select team'}
-                    </SelectValue>
-                  </SelectTrigger>
-                  <SelectContent className="bg-surface-raised border-border/60">
-                    <SelectItem value="team1" className="focus:bg-primary/10 focus:text-primary">{match.team1}</SelectItem>
-                    <SelectItem value="team2" className="focus:bg-primary/10 focus:text-primary">{match.team2}</SelectItem>
-                  </SelectContent>
-                </Select>
-              </div>
-              <div className="space-y-1.5 w-full sm:w-28">
-                <label className="text-[11px] font-semibold uppercase tracking-wider" style={{ color: '#4A5F75', fontFamily: 'var(--font-heading)' }}>Amount (₹)</label>
-                <Input
-                  type="number"
-                  value={newBet.amount || ''}
-                  onChange={(e) => setNewBet({ ...newBet, amount: Number(e.target.value) })}
-                  className="bg-surface-light border-border/60 h-9 scoreboard-num"
-                />
-              </div>
-              <div className="flex gap-2">
-                <button onClick={handleAddBet} className="action-btn-primary px-4 py-2 text-sm rounded-lg">Save</button>
-                <button
-                  onClick={() => setIsAddingBet(false)}
-                  className="w-9 h-9 rounded-lg flex items-center justify-center"
-                  style={{ background: 'rgba(255,255,255,0.04)', color: '#7A90A8' }}
-                >
-                  <X className="w-4 h-4" />
-                </button>
-              </div>
+            )}
+            <div className="w-6 h-6 flex items-center justify-center rounded-full" style={{ background: 'rgba(255,255,255,0.03)' }}>
+              {isParticipantBetsExpanded ? <ChevronUp size={14} style={{ color: '#4A5F75' }} /> : <ChevronDown size={14} style={{ color: '#4A5F75' }} />}
             </div>
           </div>
-        )}
+        </button>
 
-        {/* Bets list */}
-        {bets.length === 0 ? (
-          <div className="empty-state m-4">
-            <Trophy className="w-8 h-8" style={{ color: '#2A3F55' }} />
-            <p className="text-sm" style={{ color: '#4A5F75' }}>No bets placed yet.</p>
-          </div>
-        ) : (
-          <div>
-            {/* Desktop header row */}
-            <div
-              className="hidden md:grid grid-cols-[1fr_1fr_100px_80px_100px_48px] px-5 py-2.5 text-[10px] font-bold uppercase tracking-widest"
-              style={{ color: '#4A5F75', borderBottom: '1px solid rgba(255,255,255,0.04)', fontFamily: 'var(--font-heading)' }}
-            >
-              <span>Participant</span>
-              <span>Predicted</span>
-              <span className="text-right">Amount</span>
-              <span className="text-center">Result</span>
-              <span className="text-right">P/L</span>
-              <span />
-            </div>
-
-            {bets.map((bet) => {
-              const participant = participants.find((p) => p.id === bet.participant_id);
-              const stripClass = bet.result === 'win' ? 'bet-strip--win' : bet.result === 'loss' ? 'bet-strip--loss' : 'bet-strip--pending';
-
-              return (
-                <div key={bet.id} className={cn('bet-strip p-4', stripClass)}>
-                  {/* Desktop */}
-                  <div className="hidden md:grid grid-cols-[1fr_1fr_100px_80px_100px_80px] items-center gap-3 w-full">
-                    <div className="flex items-center gap-2">
-                      <div className={cn('w-7 h-7 rounded-full flex items-center justify-center font-bold text-xs shrink-0', getAvatarColor(participant?.name || ''))}>
-                        {participant?.name?.charAt(0).toUpperCase() || '?'}
-                      </div>
-                      <span className="text-base font-semibold truncate" style={{ color: '#E8EDF5' }}>{participant?.name}</span>
-                    </div>
-                    {editingBetId === bet.id ? (
-                      <Select value={editBetData.predicted_winner} onValueChange={(v) => setEditBetData({ ...editBetData, predicted_winner: v })}>
-                        <SelectTrigger className="bg-surface-light border-border/60 h-8 text-sm px-2">
-                          <SelectValue />
-                        </SelectTrigger>
-                        <SelectContent className="bg-surface-raised border-border/60">
-                          <SelectItem value="team1">{match.team1}</SelectItem>
-                          <SelectItem value="team2">{match.team2}</SelectItem>
-                        </SelectContent>
-                      </Select>
-                    ) : (
-                      <span className="text-base truncate" style={{ color: '#7A90A8' }}>
-                        {bet.predicted_winner === 'team1' ? match.team1 : bet.predicted_winner === 'team2' ? match.team2 : bet.predicted_winner}
-                      </span>
-                    )}
-
-                    {editingBetId === bet.id ? (
-                      <Input
-                        type="number"
-                        value={editBetData.amount || ''}
-                        onChange={(e) => setEditBetData({ ...editBetData, amount: Number(e.target.value) })}
-                        className="bg-surface-light border-border/60 h-8 scoreboard-num px-2"
-                      />
-                    ) : (
-                      <span className="text-right scoreboard-num text-base" style={{ color: '#E8EDF5' }}>₹{bet.amount}</span>
-                    )}
-                    <div className="flex justify-center">
-                      <span className={cn('status-pill text-[10px]', `status-pill--${bet.result}`)}>
-                        {bet.result.toUpperCase()}
-                      </span>
-                    </div>
-                    <div className={cn('text-right scoreboard-num text-base font-bold', bet.profit_loss > 0 ? 'pl-positive' : bet.profit_loss < 0 ? 'pl-negative' : 'pl-neutral')}>
-                      {bet.profit_loss > 0 ? '+' : ''}{bet.profit_loss}
-                    </div>
-                    <div className="flex items-center justify-end gap-1">
-                      {editingBetId === bet.id ? (
-                        <>
-                          <button onClick={handleUpdateBet} className="action-btn-primary px-3 py-1.5 text-xs rounded-md">Save</button>
-                          <button onClick={() => setEditingBetId(null)} className="w-7 h-7 rounded-md flex items-center justify-center bg-white/5 text-subtle ml-1">
-                            <X className="w-3.5 h-3.5" />
-                          </button>
-                        </>
-                      ) : (
-                        <>
-                          <button
-                            onClick={() => { setEditingBetId(bet.id); setEditBetData(bet); }}
-                            className="w-7 h-7 rounded-full flex items-center justify-center transition-colors"
-                            style={{ color: '#4A5F75' }}
-                            onMouseEnter={e => { e.currentTarget.style.color = '#00D4C8'; e.currentTarget.style.background = 'rgba(0,212,200,0.08)'; }}
-                            onMouseLeave={e => { e.currentTarget.style.color = '#4A5F75'; e.currentTarget.style.background = 'transparent'; }}
-                          >
-                            <Edit2 className="w-3.5 h-3.5" />
-                          </button>
-                          <button
-                            onClick={() => handleDeleteBet(bet.id)}
-                            className={cn(
-                              "h-7 rounded-full flex items-center justify-center transition-all duration-200 px-2 gap-1.5",
-                              confirmDeleteBetId === bet.id 
-                                ? "bg-red-500 text-white w-auto" 
-                                : "w-7 text-[#4A5F75]"
-                            )}
-                            onMouseEnter={e => { if (confirmDeleteBetId !== bet.id) { e.currentTarget.style.color = '#EF4444'; e.currentTarget.style.background = 'rgba(239,68,68,0.08)'; } }}
-                            onMouseLeave={e => { if (confirmDeleteBetId !== bet.id) { e.currentTarget.style.color = '#4A5F75'; e.currentTarget.style.background = 'transparent'; } }}
-                          >
-                            {confirmDeleteBetId === bet.id ? (
-                              <>
-                                <Trash2 className="w-3 h-3" />
-                                <span className="text-[9px] font-bold uppercase">Delete?</span>
-                              </>
-                            ) : (
-                              <Trash2 className="w-3.5 h-3.5" />
-                            )}
-                          </button>
-                        </>
-                      )}
-                    </div>
+        {isParticipantBetsExpanded && (
+          <div className="animate-in slide-in-from-top-2 duration-300">
+            {/* Add Bet form */}
+            {isAddingBet && (
+              <div
+                className="p-4 animate-in slide-in-from-top-2 duration-200"
+                style={{ background: 'rgba(0,212,200,0.03)', borderBottom: '1px solid rgba(0,212,200,0.1)' }}
+              >
+                <div className="flex flex-col sm:flex-row gap-3 items-end">
+                  <div className="space-y-1.5 flex-1">
+                    <label className="text-[11px] font-semibold uppercase tracking-wider" style={{ color: '#4A5F75', fontFamily: 'var(--font-heading)' }}>Participant</label>
+                    <Select value={newBet.participant_id} onValueChange={(v) => setNewBet({ ...newBet, participant_id: v })}>
+                      <SelectTrigger className="bg-surface-light border-border/60 h-9 text-sm">
+                        <SelectValue placeholder="Select participant">
+                          {participants.find(p => p.id === newBet.participant_id)?.name || 'Select participant'}
+                        </SelectValue>
+                      </SelectTrigger>
+                      <SelectContent className="bg-surface-raised border-border/60">
+                        {participants.filter(p => p.is_active).map((p) => (
+                          <SelectItem key={p.id} value={p.id} className="focus:bg-primary/10 focus:text-primary">{p.name}</SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
                   </div>
-
-                  {/* Mobile */}
-                  <div className="md:hidden space-y-2">
-                    <div className="flex justify-between items-center">
-                      <div className="flex items-center gap-2">
-                        <div className={cn('w-8 h-8 rounded-full flex items-center justify-center font-bold text-sm shrink-0', getAvatarColor(participant?.name || ''))}>
-                          {participant?.name?.charAt(0).toUpperCase() || '?'}
-                        </div>
-                        <span className="font-semibold" style={{ color: '#E8EDF5' }}>{participant?.name}</span>
-                      </div>
-                      <span className={cn('status-pill text-[10px]', `status-pill--${bet.result}`)}>
-                        {bet.result.toUpperCase()}
-                      </span>
-                    </div>
-                    {editingBetId === bet.id ? (
-                      <div className="flex gap-2 w-full mt-2">
-                        <Select value={editBetData.predicted_winner} onValueChange={(v) => setEditBetData({ ...editBetData, predicted_winner: v })}>
-                          <SelectTrigger className="bg-surface-light border-border/60 h-8 text-xs flex-1 px-2">
-                            <SelectValue />
-                          </SelectTrigger>
-                          <SelectContent className="bg-surface-raised border-border/60">
-                            <SelectItem value="team1">{match.team1}</SelectItem>
-                            <SelectItem value="team2">{match.team2}</SelectItem>
-                          </SelectContent>
-                        </Select>
-                        <Input
-                          type="number"
-                          value={editBetData.amount || ''}
-                          onChange={(e) => setEditBetData({ ...editBetData, amount: Number(e.target.value) })}
-                          className="bg-surface-light border-border/60 h-8 scoreboard-num px-2 w-24"
-                        />
-                      </div>
-                    ) : (
-                      <div className="flex justify-between items-center text-xs w-full" style={{ color: '#7A90A8' }}>
-                        <span>Predicted: <span style={{ color: '#E8EDF5' }}>{bet.predicted_winner === 'team1' ? match.team1 : bet.predicted_winner === 'team2' ? match.team2 : bet.predicted_winner}</span></span>
-                        <span className="scoreboard-num">₹{bet.amount}</span>
-                      </div>
-                    )}
-                    <div className="flex justify-between items-center pt-1.5" style={{ borderTop: '1px solid rgba(255,255,255,0.04)' }}>
-                      <span className="text-xs" style={{ color: '#4A5F75' }}>P/L</span>
-                      <div className="flex items-center gap-3">
-                        <span className={cn('scoreboard-num font-bold', bet.profit_loss > 0 ? 'pl-positive' : bet.profit_loss < 0 ? 'pl-negative' : 'pl-neutral')}>
-                          {bet.profit_loss > 0 ? '+' : ''}{bet.profit_loss}
-                        </span>
-                        {editingBetId === bet.id ? (
-                          <>
-                            <button onClick={handleUpdateBet} className="action-btn-primary px-3 py-1 text-[10px] rounded flex-1">Save</button>
-                            <button onClick={() => setEditingBetId(null)} className="px-3 py-1 text-[10px] rounded bg-white/5 text-subtle">Cancel</button>
-                          </>
-                        ) : (
-                          <>
-                            <button onClick={() => { setEditingBetId(bet.id); setEditBetData(bet); }} className="text-xs" style={{ color: '#00D4C8' }}>
-                              <Edit2 className="w-3.5 h-3.5" />
-                            </button>
-                            <button 
-                              onClick={() => handleDeleteBet(bet.id)} 
-                              className={cn(
-                                "flex items-center gap-1.5 px-2 py-1 rounded transition-all",
-                                confirmDeleteBetId === bet.id ? "bg-red-500 text-white" : "text-[#EF4444]"
-                              )}
-                            >
-                              <Trash2 className="w-3.5 h-3.5" />
-                              {confirmDeleteBetId === bet.id && <span className="text-[10px] font-bold uppercase">Confirm?</span>}
-                            </button>
-                          </>
-                        )}
-                      </div>
-                    </div>
+                  <div className="space-y-1.5 flex-1">
+                    <label className="text-[11px] font-semibold uppercase tracking-wider" style={{ color: '#4A5F75', fontFamily: 'var(--font-heading)' }}>Predicted Winner</label>
+                    <Select value={newBet.predicted_winner} onValueChange={(v) => setNewBet({ ...newBet, predicted_winner: v })}>
+                      <SelectTrigger className="bg-surface-light border-border/60 h-9 text-sm">
+                        <SelectValue placeholder="Select team">
+                          {newBet.predicted_winner === 'team1' ? match.team1 : newBet.predicted_winner === 'team2' ? match.team2 : 'Select team'}
+                        </SelectValue>
+                      </SelectTrigger>
+                      <SelectContent className="bg-surface-raised border-border/60">
+                        <SelectItem value="team1" className="focus:bg-primary/10 focus:text-primary">{match.team1}</SelectItem>
+                        <SelectItem value="team2" className="focus:bg-primary/10 focus:text-primary">{match.team2}</SelectItem>
+                      </SelectContent>
+                    </Select>
+                  </div>
+                  <div className="space-y-1.5 w-full sm:w-28">
+                    <label className="text-[11px] font-semibold uppercase tracking-wider" style={{ color: '#4A5F75', fontFamily: 'var(--font-heading)' }}>Amount (₹)</label>
+                    <Input
+                      type="number"
+                      value={newBet.amount || ''}
+                      onChange={(e) => setNewBet({ ...newBet, amount: Number(e.target.value) })}
+                      className="bg-surface-light border-border/60 h-9 scoreboard-num"
+                    />
+                  </div>
+                  <div className="flex gap-2">
+                    <button onClick={handleAddBet} className="action-btn-primary px-4 py-2 text-sm rounded-lg">Save</button>
+                    <button
+                      onClick={() => setIsAddingBet(false)}
+                      className="w-9 h-9 rounded-lg flex items-center justify-center"
+                      style={{ background: 'rgba(255,255,255,0.04)', color: '#7A90A8' }}
+                    >
+                      <X className="w-4 h-4" />
+                    </button>
                   </div>
                 </div>
-              );
-            })}
+              </div>
+            )}
+
+            {/* Bets list */}
+            {bets.length === 0 ? (
+              <div className="empty-state m-4">
+                <Trophy className="w-8 h-8" style={{ color: '#2A3F55' }} />
+                <p className="text-sm" style={{ color: '#4A5F75' }}>No bets placed yet.</p>
+              </div>
+            ) : (
+              <div>
+                {/* Desktop header row */}
+                <div
+                  className="hidden md:grid grid-cols-[1fr_1fr_100px_80px_100px_48px] px-5 py-2.5 text-[10px] font-bold uppercase tracking-widest"
+                  style={{ color: '#4A5F75', borderBottom: '1px solid rgba(255,255,255,0.04)', fontFamily: 'var(--font-heading)' }}
+                >
+                  <span>Participant</span>
+                  <span>Predicted</span>
+                  <span className="text-right">Amount</span>
+                  <span className="text-center">Result</span>
+                  <span className="text-right">P/L</span>
+                  <span />
+                </div>
+
+                {bets.map((bet) => {
+                  const participant = participants.find((p) => p.id === bet.participant_id);
+                  const stripClass = bet.result === 'win' ? 'bet-strip--win' : bet.result === 'loss' ? 'bet-strip--loss' : 'bet-strip--pending';
+
+                  return (
+                    <div key={bet.id} className={cn('bet-strip p-4', stripClass)}>
+                      {/* Desktop */}
+                      <div className="hidden md:grid grid-cols-[1fr_1fr_100px_80px_100px_80px] items-center gap-3 w-full">
+                        <div className="flex items-center gap-2">
+                          <div className={cn('w-7 h-7 rounded-full flex items-center justify-center font-bold text-xs shrink-0', getAvatarColor(participant?.name || ''))}>
+                            {participant?.name?.charAt(0).toUpperCase() || '?'}
+                          </div>
+                          <span className="text-base font-semibold truncate" style={{ color: '#E8EDF5' }}>{participant?.name}</span>
+                        </div>
+                        {editingBetId === bet.id ? (
+                          <Select value={editBetData.predicted_winner} onValueChange={(v) => setEditBetData({ ...editBetData, predicted_winner: v })}>
+                            <SelectTrigger className="bg-surface-light border-border/60 h-8 text-sm px-2">
+                              <SelectValue />
+                            </SelectTrigger>
+                            <SelectContent className="bg-surface-raised border-border/60">
+                              <SelectItem value="team1">{match.team1}</SelectItem>
+                              <SelectItem value="team2">{match.team2}</SelectItem>
+                            </SelectContent>
+                          </Select>
+                        ) : (
+                          <span className="text-base truncate" style={{ color: '#7A90A8' }}>
+                            {bet.predicted_winner === 'team1' ? match.team1 : bet.predicted_winner === 'team2' ? match.team2 : bet.predicted_winner}
+                          </span>
+                        )}
+
+                        {editingBetId === bet.id ? (
+                          <Input
+                            type="number"
+                            value={editBetData.amount || ''}
+                            onChange={(e) => setEditBetData({ ...editBetData, amount: Number(e.target.value) })}
+                            className="bg-surface-light border-border/60 h-8 scoreboard-num px-2"
+                          />
+                        ) : (
+                          <span className="text-right scoreboard-num text-base" style={{ color: '#E8EDF5' }}>₹{bet.amount}</span>
+                        )}
+                        <div className="flex justify-center">
+                          <span className={cn('status-pill text-[10px]', `status-pill--${bet.result}`)}>
+                            {bet.result.toUpperCase()}
+                          </span>
+                        </div>
+                        <div className={cn('text-right scoreboard-num text-base font-bold', bet.profit_loss > 0 ? 'pl-positive' : bet.profit_loss < 0 ? 'pl-negative' : 'pl-neutral')}>
+                          {bet.profit_loss > 0 ? '+' : ''}{bet.profit_loss}
+                        </div>
+                        <div className="flex items-center justify-end gap-1">
+                          {editingBetId === bet.id ? (
+                            <>
+                              <button onClick={handleUpdateBet} className="action-btn-primary px-3 py-1.5 text-xs rounded-md">Save</button>
+                              <button onClick={() => setEditingBetId(null)} className="w-7 h-7 rounded-md flex items-center justify-center bg-white/5 text-subtle ml-1">
+                                <X className="w-3.5 h-3.5" />
+                              </button>
+                            </>
+                          ) : (
+                            <>
+                              <button
+                                onClick={() => { setEditingBetId(bet.id); setEditBetData(bet); }}
+                                className="w-7 h-7 rounded-full flex items-center justify-center transition-colors"
+                                style={{ color: '#4A5F75' }}
+                                onMouseEnter={e => { e.currentTarget.style.color = '#00D4C8'; e.currentTarget.style.background = 'rgba(0,212,200,0.08)'; }}
+                                onMouseLeave={e => { e.currentTarget.style.color = '#4A5F75'; e.currentTarget.style.background = 'transparent'; }}
+                              >
+                                <Edit2 className="w-3.5 h-3.5" />
+                              </button>
+                              <button
+                                onClick={() => handleDeleteBet(bet.id)}
+                                className={cn(
+                                  "h-7 rounded-full flex items-center justify-center transition-all duration-200 px-2 gap-1.5",
+                                  confirmDeleteBetId === bet.id
+                                    ? "bg-red-500 text-white w-auto"
+                                    : "w-7 text-[#4A5F75]"
+                                )}
+                                onMouseEnter={e => { if (confirmDeleteBetId !== bet.id) { e.currentTarget.style.color = '#EF4444'; e.currentTarget.style.background = 'rgba(239,68,68,0.08)'; } }}
+                                onMouseLeave={e => { if (confirmDeleteBetId !== bet.id) { e.currentTarget.style.color = '#4A5F75'; e.currentTarget.style.background = 'transparent'; } }}
+                              >
+                                {confirmDeleteBetId === bet.id ? (
+                                  <>
+                                    <Trash2 className="w-3 h-3" />
+                                    <span className="text-[9px] font-bold uppercase">Delete?</span>
+                                  </>
+                                ) : (
+                                  <Trash2 className="w-3.5 h-3.5" />
+                                )}
+                              </button>
+                            </>
+                          )}
+                        </div>
+                      </div>
+
+                      {/* Mobile */}
+                      <div className="md:hidden space-y-2">
+                        <div className="flex justify-between items-center">
+                          <div className="flex items-center gap-2">
+                            <div className={cn('w-8 h-8 rounded-full flex items-center justify-center font-bold text-sm shrink-0', getAvatarColor(participant?.name || ''))}>
+                              {participant?.name?.charAt(0).toUpperCase() || '?'}
+                            </div>
+                            <span className="font-semibold" style={{ color: '#E8EDF5' }}>{participant?.name}</span>
+                          </div>
+                          <span className={cn('status-pill text-[10px]', `status-pill--${bet.result}`)}>
+                            {bet.result.toUpperCase()}
+                          </span>
+                        </div>
+                        {editingBetId === bet.id ? (
+                          <div className="flex gap-2 w-full mt-2">
+                            <Select value={editBetData.predicted_winner} onValueChange={(v) => setEditBetData({ ...editBetData, predicted_winner: v })}>
+                              <SelectTrigger className="bg-surface-light border-border/60 h-8 text-xs flex-1 px-2">
+                                <SelectValue />
+                              </SelectTrigger>
+                              <SelectContent className="bg-surface-raised border-border/60">
+                                <SelectItem value="team1">{match.team1}</SelectItem>
+                                <SelectItem value="team2">{match.team2}</SelectItem>
+                              </SelectContent>
+                            </Select>
+                            <Input
+                              type="number"
+                              value={editBetData.amount || ''}
+                              onChange={(e) => setEditBetData({ ...editBetData, amount: Number(e.target.value) })}
+                              className="bg-surface-light border-border/60 h-8 scoreboard-num px-2 w-24"
+                            />
+                          </div>
+                        ) : (
+                          <div className="flex justify-between items-center text-xs w-full" style={{ color: '#7A90A8' }}>
+                            <span>Predicted: <span style={{ color: '#E8EDF5' }}>{bet.predicted_winner === 'team1' ? match.team1 : bet.predicted_winner === 'team2' ? match.team2 : bet.predicted_winner}</span></span>
+                            <span className="scoreboard-num">₹{bet.amount}</span>
+                          </div>
+                        )}
+                        <div className="flex justify-between items-center pt-1.5" style={{ borderTop: '1px solid rgba(255,255,255,0.04)' }}>
+                          <span className="text-xs" style={{ color: '#4A5F75' }}>P/L</span>
+                          <div className="flex items-center gap-3">
+                            <span className={cn('scoreboard-num font-bold', bet.profit_loss > 0 ? 'pl-positive' : bet.profit_loss < 0 ? 'pl-negative' : 'pl-neutral')}>
+                              {bet.profit_loss > 0 ? '+' : ''}{bet.profit_loss}
+                            </span>
+                            {editingBetId === bet.id ? (
+                              <>
+                                <button onClick={handleUpdateBet} className="action-btn-primary px-3 py-1 text-[10px] rounded flex-1">Save</button>
+                                <button onClick={() => setEditingBetId(null)} className="px-3 py-1 text-[10px] rounded bg-white/5 text-subtle">Cancel</button>
+                              </>
+                            ) : (
+                              <>
+                                <button onClick={() => { setEditingBetId(bet.id); setEditBetData(bet); }} className="text-xs" style={{ color: '#00D4C8' }}>
+                                  <Edit2 className="w-3.5 h-3.5" />
+                                </button>
+                                <button
+                                  onClick={() => handleDeleteBet(bet.id)}
+                                  className={cn(
+                                    "flex items-center gap-1.5 px-2 py-1 rounded transition-all",
+                                    confirmDeleteBetId === bet.id ? "bg-red-500 text-white" : "text-[#EF4444]"
+                                  )}
+                                >
+                                  <Trash2 className="w-3.5 h-3.5" />
+                                  {confirmDeleteBetId === bet.id && <span className="text-[10px] font-bold uppercase">Confirm?</span>}
+                                </button>
+                              </>
+                            )}
+                          </div>
+                        </div>
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+            )}
           </div>
         )}
       </div>

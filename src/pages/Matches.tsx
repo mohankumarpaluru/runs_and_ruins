@@ -6,8 +6,9 @@ import { Link } from 'react-router-dom';
 import { cn } from '../lib/utils';
 import { supabase } from '../lib/supabaseClient';
 import { toast } from 'sonner';
-import { Plus, X, Trophy, CalendarDays, MapPin } from 'lucide-react';
+import { Plus, X, Trophy, CalendarDays, MapPin, Ban, ChevronDown, ChevronUp } from 'lucide-react';
 import { TeamLogo } from '../components/TeamLogo';
+import { PointsTable } from '../components/PointsTable';
 
 export function Matches() {
   const { matches, fetchMatches } = useStore();
@@ -78,6 +79,9 @@ export function Matches() {
         </button>
       </div>
 
+      {/* ─── Points Table ─────────────────── */}
+      <PointsTable matches={matches} />
+
       {/* Add Match Form */}
       {isAdding && (
         <div className="form-action-card p-6 animate-in slide-in-from-top-4 duration-300">
@@ -126,9 +130,10 @@ export function Matches() {
       ) : (
         <div className="grid gap-5 grid-cols-1 sm:grid-cols-2 lg:grid-cols-3">
           {matches.map((match) => {
+            const isCancelled = match.status === 'cancelled';
             const isCompleted = match.status === 'completed' || match.status === 'settled';
-            const isUpcoming = match.status === 'scheduled';
-            const winnerTeam = match.winner; // 'team1' | 'team2' | null
+            const isUpcoming  = match.status === 'scheduled';
+            const winnerTeam  = match.winner;
 
             return (
               <Link key={match.id} to={`/matches/${match.id}`} className="block">
@@ -140,9 +145,13 @@ export function Matches() {
                   )}
                   style={{ isolation: 'isolate' }}
                 >
-                  {/* Winner accent bar — left side always shows winner-side */}
+                  {/* Winner accent bar */}
                   {isCompleted && winnerTeam === 'team1' && <div className="winner-accent-left" />}
                   {isCompleted && winnerTeam === 'team2' && <div className="winner-accent-right" />}
+                  {/* Cancelled stripe */}
+                  {isCancelled && (
+                    <div style={{ position: 'absolute', top: 0, left: 0, right: 0, height: '2px', background: 'repeating-linear-gradient(90deg, rgba(245,165,36,0.5) 0px, rgba(245,165,36,0.5) 6px, transparent 6px, transparent 12px)' }} />
+                  )}
 
                   <div className="p-5 flex flex-col h-full">
                     {/* Top row: match no + status */}
@@ -150,11 +159,18 @@ export function Matches() {
                       <span className="text-xs scoreboard-num font-bold" style={{ color: isUpcoming ? '#00D4C8' : '#3A5570' }}>
                         Match #{match.match_no}
                       </span>
-                      {/* Status pill — softer, lower dominance */}
+                      {/* Status pill */}
                       <span
                         className="text-[0.6875rem] font-bold px-2.5 py-0.5 rounded-full"
                         style={
-                          isUpcoming ? {
+                          isCancelled ? {
+                            background: 'rgba(245,165,36,0.08)',
+                            border: '1px solid rgba(245,165,36,0.2)',
+                            color: 'rgba(245,165,36,0.8)',
+                            fontFamily: 'var(--font-heading)',
+                            letterSpacing: '0.06em',
+                            display: 'flex', alignItems: 'center', gap: '4px',
+                          } : isUpcoming ? {
                             background: 'rgba(0,212,200,0.07)',
                             border: '1px solid rgba(0,212,200,0.18)',
                             color: 'rgba(0,212,200,0.75)',
@@ -175,7 +191,8 @@ export function Matches() {
                           }
                         }
                       >
-                        {isUpcoming ? 'Upcoming' : match.status === 'settled' ? 'Settled' : 'Completed'}
+                        {isCancelled && <Ban style={{ width: '9px', height: '9px' }} />}
+                        {isCancelled ? 'No Result' : isUpcoming ? 'Upcoming' : match.status === 'settled' ? 'Settled' : 'Completed'}
                       </span>
                     </div>
 

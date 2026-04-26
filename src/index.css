@@ -715,4 +715,16 @@
       transition-duration: 0.01ms !important;
     }
   }
+
+  /* ── Profile win-rate bar ── */
+  .win-bar-track {
+    background: rgba(255, 255, 255, 0.06);
+    border-radius: 9999px;
+    overflow: hidden;
+  }
+  .win-bar-fill {
+    height: 6px;
+    border-radius: 9999px;
+    transition: width 0.6s cubic-bezier(0.4, 0, 0.2, 1);
+  }
 }
